@@ -21,18 +21,21 @@
       <h1>Medical Students Presentation Tracker</h1>
       <p class="header-org">Internal Medicine, CHUK</p>
       <p class="header-tagline">Track planned presentations and consultant availability.</p>
+      <div class="live"><span class="live-dot" aria-hidden="true"></span> LIVE TRACKING</div>
     </div>
     <div class="header-actions">
-      <div class="live"><span class="live-dot" aria-hidden="true"></span> LIVE TRACKING</div>
       <button class="register-button" id="register-menu" type="button">
-        Register a Presentation
+        <span>Register a Presentation</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M4 10h11M10 5l5 5-5 5" />
+        </svg>
       </button>
 
-      <!-- Hidden compatibility hooks for the existing app.js menu handlers. -->
-      <div hidden aria-hidden="true">
-        <button id="menu-button" type="button"></button>
+      <!-- Retained as hidden compatibility hooks for the existing app.js. -->
+      <div class="legacy-menu-hooks" hidden aria-hidden="true">
+        <button id="menu-button" type="button" tabindex="-1"></button>
         <nav id="menu-dropdown">
-          <button id="dashboard-menu" type="button">Presentation Dashboard</button>
+          <button id="dashboard-menu" type="button" tabindex="-1">Presentation Dashboard</button>
         </nav>
       </div>
     </div>
