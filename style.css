@@ -45,17 +45,16 @@ button { cursor: pointer; touch-action: manipulation; }
   border-radius: 18px 18px 0 0;
 }
 
-.header-top {
+.header-main {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 32px;
+  align-items: flex-start;
+  gap: 20px;
 }
 
-.brand { font-size: 12px; font-weight: 700; letter-spacing: 1.8px; }
+.header-title { min-width: 0; flex: 1; }
 
-.header-actions { display: flex; align-items: center; gap: 14px; }
+.header-actions { display: flex; align-items: center; gap: 14px; flex: none; }
 
 .live {
   font-size: 10px;
@@ -77,7 +76,6 @@ button { cursor: pointer; touch-action: manipulation; }
   background: transparent;
   color: white;
   border-radius: 8px;
-  font-size: 22px;
   display: grid;
   place-items: center;
 }
@@ -89,7 +87,7 @@ button { cursor: pointer; touch-action: manipulation; }
   position: absolute;
   right: 0;
   top: 48px;
-  width: min(220px, calc(100vw - 40px));
+  width: min(260px, calc(100vw - 40px));
   background: white;
   color: var(--text);
   border: 1px solid var(--border);
@@ -106,22 +104,37 @@ button { cursor: pointer; touch-action: manipulation; }
   border: none;
   background: transparent;
   text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 12px;
   border-radius: 7px;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--text);
 }
 
-.menu-item:hover { background: var(--green-light); }
+.menu-item + .menu-item { margin-top: 2px; }
+.menu-icon { flex: none; color: var(--green); }
+.menu-item:hover, .menu-item:focus-visible { background: var(--green-light); }
 
 .header h1 {
   font-size: clamp(27px, 4vw, 38px);
   font-weight: 600;
   letter-spacing: -1px;
-  margin-bottom: 7px;
+  line-height: 1.15;
+  margin-bottom: 10px;
 }
 
-.header p { color: #d7e8df; font-size: 14px; }
+.header-org {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: .2px;
+  margin-bottom: 4px;
+}
+
+.header-tagline { color: #d7e8df; font-size: 14px; }
 
 /* MAIN CONTENT */
 
@@ -385,7 +398,7 @@ textarea { min-height: 95px; resize: vertical; }
   }
 
   .header { padding: 25px 21px; }
-  .header-top { margin-bottom: 24px; }
+  .header-main { gap: 12px; }
   .content { padding: 21px 17px; }
 
   .stats { gap: 8px; }
@@ -394,7 +407,8 @@ textarea { min-height: 95px; resize: vertical; }
   .stat-label { font-size: 10px; }
 
   .header h1 { font-size: 27px; }
-  .brand { font-size: 10px; letter-spacing: 1px; }
+  .header-org { font-size: 15px; }
+  .header-tagline { font-size: 13px; }
   .live { display: none; }
   .menu-button { width: 44px; height: 44px; }
   .menu-dropdown { top: 52px; }
