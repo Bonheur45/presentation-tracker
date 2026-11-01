@@ -312,7 +312,11 @@ function setSyncStatus(text, type) {
   el.textContent = text;
   el.className = text ? `sync-status ${type || ""}`.trim() : "sync-status";
   const live = document.querySelector(".live");
-  if (live) live.textContent = type === "error" ? "● OFFLINE" : "● LIVE TRACKING";
+  if (live) {
+    const label = live.querySelector(".live-label");
+    if (label) label.textContent = type === "error" ? "OFFLINE" : "LIVE TRACKING";
+    live.classList.toggle("offline", type === "error");
+  }
 }
 
 // Shown before the first successful read, so no placeholder numbers pretend to be data.
