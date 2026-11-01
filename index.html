@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#173c32">
+<meta name="robots" content="noindex, nofollow">
+<!-- Content Security Policy: scripts and styles only from this site; the page may talk only to Google Apps Script. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://script.google.com https://*.googleusercontent.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23173c32'/%3E%3Cpath d='M14 7h4v7h7v4h-7v7h-4v-7H7v-4h7z' fill='%23fff'/%3E%3C/svg%3E">
+<title>Clinical Presentation Tracker</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<main class="container">
+
+<header class="header">
+  <div class="header-top">
+    <div class="brand">CLINICAL PRESENTATION TRACKER</div>
+    <div class="header-actions">
+      <div class="live">● LIVE TRACKING</div>
+      <div class="menu-wrapper">
+        <button class="menu-button" id="menu-button" aria-label="Open menu"
+          aria-expanded="false" aria-controls="menu-dropdown">☰</button>
+        <nav class="menu-dropdown" id="menu-dropdown">
+          <button class="menu-item" id="register-menu">+ Register a Presentation</button>
+          <button class="menu-item" id="dashboard-menu">Presentation Dashboard</button>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <h1>Presentation Readiness</h1>
+  <p>Track planned presentations and consultant availability.</p>
+</header>
+
+<div class="content">
+
+  <section class="stats">
+    <div class="stat">
+      <div class="stat-number" id="total">0</div>
+      <div class="stat-label">Total presentations</div>
+    </div>
+    <div class="stat ready">
+      <div class="stat-number" id="ready">0</div>
+      <div class="stat-label">Ready</div>
+    </div>
+    <div class="stat unready">
+      <div class="stat-number" id="unready">0</div>
+      <div class="stat-label">Unready</div>
+    </div>
+  </section>
+
+  <section class="progress-section">
+    <div class="progress-top">
+      <strong>Presentation target</strong>
+      <span id="progress-label">0 / 28</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progress"></div></div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title">Ready Presentations
+      <span class="ready-tag" id="ready-count">0 confirmed</span>
+    </h2>
+    <div id="ready-list"><div class="empty">No confirmed presentations yet.</div></div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title">Unready Presentations
+      <span class="unready-tag" id="unready-count">0 requiring attention</span>
+    </h2>
+    <div id="unready-list"><div class="empty">No outstanding challenges.</div></div>
+  </section>
+
+  <section class="section" id="overview-section" tabindex="-1">
+    <h2 class="section-title">Presentation Overview</h2>
+    <div class="dashboard-tools">
+      <input id="search" type="search" placeholder="Search topic or student..."
+        aria-label="Search by topic or student">
+      <select id="filter" aria-label="Filter presentations">
+        <option value="all">All presentations</option>
+        <option value="ready">Ready</option>
+        <option value="unready">Unready</option>
+      </select>
+      <button class="refresh" id="refresh" type="button">↻ Refresh</button>
+    </div>
+    <p class="sync-status" id="sync-status" role="status" aria-live="polite"></p>
+    <div id="overview"><div class="empty">Loading presentations…</div></div>
+  </section>
+
+</div>
+
+<footer class="footer">Clinical Presentation Tracker · Medical Education</footer>
+
+</main>
+
+<!-- REGISTRATION / EDIT MODAL (one form, two modes: register a new presentation, edit an existing one) -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+
+    <div class="modal-header">
+      <div>
+        <h2 id="modal-title">Register a Presentation</h2>
+        <p id="modal-subtitle">Enter your planned presentation details below.</p>
+      </div>
+      <button class="close-button" id="close-modal" type="button"
+        aria-label="Close form">×</button>
+    </div>
+
+    <form id="presentation-form" novalidate>
+      <div class="form-grid">
+
+        <div class="field">
+          <label for="date">Planned presentation date</label>
+          <input type="date" id="date" min="2000-01-01" max="2100-12-31" required>
+          <p class="field-error" id="date-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field">
+          <label for="time">Planned presentation time</label>
+          <input type="time" id="time" required>
+          <p class="field-error" id="time-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field full">
+          <label for="topic">Presentation topic</label>
+          <input type="text" id="topic" placeholder="Enter presentation topic"
+            autocomplete="off" required>
+          <p class="field-error" id="topic-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field">
+          <label for="student">Medical student presenter</label>
+          <input type="text" id="student" placeholder="Full name"
+            autocomplete="name" required>
+          <p class="field-error" id="student-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field">
+          <label for="supervisor">Supervisor</label>
+          <input type="text" id="supervisor" placeholder="Supervisor's name"
+            autocomplete="off" required>
+          <p class="field-error" id="supervisor-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field full">
+          <label for="consultant">Consultant</label>
+          <input type="text" id="consultant" placeholder="Consultant's name"
+            autocomplete="off" required>
+          <p class="field-error" id="consultant-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field full">
+          <label for="availability">Has the consultant confirmed availability?</label>
+          <select id="availability" required>
+            <option value="">Select confirmation status</option>
+            <option value="Confirmed">Confirmed available</option>
+            <option value="Pending">Not yet confirmed</option>
+            <option value="Unavailable">Unavailable</option>
+          </select>
+          <p class="field-error" id="availability-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field full hidden" id="challenge-field">
+          <label for="challenge">Challenge / reason</label>
+          <textarea id="challenge" placeholder="Explain why this presentation is not ready..."></textarea>
+          <p class="field-error" id="challenge-error" aria-live="polite"></p>
+        </div>
+
+      </div>
+
+      <button class="submit-btn" id="submit-btn" type="submit">SUBMIT PRESENTATION</button>
+      <div class="message" id="message" role="status" aria-live="polite"></div>
+    </form>
+
+  </div>
+</div>
+
+<!-- Order matters: config → dashboard (data + rendering) → form → app (menu + startup) -->
+<script src="js/config.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/form.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
