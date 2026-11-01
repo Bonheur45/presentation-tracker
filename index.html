@@ -23,15 +23,16 @@
       <p class="header-tagline">Track planned presentations and consultant availability.</p>
     </div>
     <div class="header-actions">
-      <div class="live">● LIVE TRACKING</div>
-      <div class="menu-wrapper">
-        <button class="menu-button" id="menu-button" type="button" aria-label="Open menu"
-          aria-expanded="false" aria-controls="menu-dropdown">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-        </button>
-        <nav class="menu-dropdown" id="menu-dropdown" aria-label="Main menu">
-          <button class="menu-item" id="register-menu" type="button">Register a Presentation</button>
-          <button class="menu-item" id="dashboard-menu" type="button">Presentation Dashboard</button>
+      <div class="live"><span class="live-dot" aria-hidden="true"></span> LIVE TRACKING</div>
+      <button class="register-button" id="register-menu" type="button">
+        Register a Presentation
+      </button>
+
+      <!-- Hidden compatibility hooks for the existing app.js menu handlers. -->
+      <div hidden aria-hidden="true">
+        <button id="menu-button" type="button"></button>
+        <nav id="menu-dropdown">
+          <button id="dashboard-menu" type="button">Presentation Dashboard</button>
         </nav>
       </div>
     </div>
