@@ -14,7 +14,7 @@ The address is the open page's URL without the `#fragment` and without unrelated
 Message: title = the name, text = `Clinical Presentation Tracker: <name>` (the Control Center: just its name), url = the address. Short enough for WhatsApp.
 
 ## Behaviour
-1. `navigator.share` exists → the device's share sheet. Closing it is silent.
+1. Phone or tablet (touch is the main input) and `navigator.share` exists → the device's share sheet. Closing it is silent. Laptops and desktops skip this step, even if the browser offers a share dialog, and go straight to copying with the "Link copied" message.
 2. Otherwise, or if sharing fails → copy the address (clipboard, then the older copy command) and show **Link copied**.
 3. If copying is also blocked → a read-only box with the address, already selected, appears under the buttons with "Copy the link shown below."
 
@@ -24,8 +24,8 @@ The button is hidden with the rest of the header actions on a "Department not fo
 New: `js/share.js`, `tests/step6-share.js`, this document. Changed: `index.html` and `control.html` (the button and one script tag each), `css/style.css` (appended share rules, and `flex-wrap` on `.header-actions`). Unchanged and verified byte-for-byte by the test: `Code.gs`, `dashboard.js`, `form.js`, `department.js`, `app.js`, `config.js`, `control.js`.
 
 ## Notes
-- The browser only offers the native share sheet on HTTPS (GitHub Pages is) and on some desktop browsers; elsewhere the copy fallback is used.
+- The native share sheet is only used on touch-first devices, and only where the browser offers it (HTTPS, which GitHub Pages is); everywhere else the link is copied.
 - The button label is "Share Link" on every page (the page decides what is shared). Change the `<span>` text in the two HTML files if you prefer another wording.
 
 ## Tests
-`node tests/step6-share.js`: 74 checks. Not tested on a real phone share sheet or WhatsApp: native sharing and the clipboard are replaced by recording stand-ins in Chromium. Open each page once on a real phone after publishing.
+`node tests/step6-share.js`: 77 checks. Not tested on a real phone share sheet or WhatsApp: native sharing and the clipboard are replaced by recording stand-ins in Chromium. Open each page once on a real phone after publishing.

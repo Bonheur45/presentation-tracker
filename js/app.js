@@ -28,6 +28,14 @@ document.addEventListener("click", event => {
   if (!event.target.closest(".menu-wrapper")) closeMenu();
 });
 
+// "Control Center" button: pass the open department so the Control Center's Back button returns here.
+// Worked out at click time, because a department created in the Control Center is only known after a lookup.
+document.getElementById("control-center").addEventListener("click", event => {
+  const d = window.DEPARTMENT;
+  const isDefault = d && d.id === APP_CONFIG.DEFAULT_DEPARTMENT;
+  event.currentTarget.href = d && d.id && !isDefault ? "control.html?from=" + encodeURIComponent(d.id) : "control.html";
+});
+
 document.getElementById("register-menu").addEventListener("click", () => {
   closeMenu();
   openModal();

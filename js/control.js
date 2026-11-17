@@ -225,5 +225,14 @@
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   });
 
+  // Back button: returns to the tracker the person came from (?from=<slug>, set by the tracker's Control Center
+  // button), otherwise to the main tracker. Only a well-formed slug is used.
+  (function setBackLink() {
+    const back = byId("back-to-tracker");
+    if (!back) return;
+    const from = (new URLSearchParams(window.location.search).get("from") || "").trim().toLowerCase();
+    if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(from) && from.length <= 40) back.href = "./?d=" + encodeURIComponent(from);
+  })();
+
   loadDepartments();
 })();

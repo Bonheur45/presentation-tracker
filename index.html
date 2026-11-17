@@ -38,6 +38,13 @@
         </svg>
       </button>
 
+      <a class="register-button control-link" id="control-center" href="control.html">
+        <span>Control Center</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M4 10h11M10 5l5 5-5 5" />
+        </svg>
+      </a>
+
       <!-- Retained as hidden compatibility hooks for the existing app.js. -->
       <div class="legacy-menu-hooks" hidden aria-hidden="true">
         <button id="menu-button" type="button" tabindex="-1"></button>
@@ -77,8 +84,8 @@
   <section class="section" id="overview-section" tabindex="-1">
     <h2 class="section-title">Presentation Overview</h2>
     <div class="dashboard-tools">
-      <input id="search" type="search" placeholder="Search topic or student..."
-        aria-label="Search by topic or student">
+      <input id="search" type="search" placeholder="Search topic or any name…"
+        aria-label="Search by topic, student, supervisor or consultant">
       <select id="filter" aria-label="Filter presentations">
         <option value="all">All Presentations</option>
         <option value="pending">Pending Presentations</option>

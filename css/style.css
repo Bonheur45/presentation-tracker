@@ -32,7 +32,7 @@ button { cursor: pointer; touch-action: manipulation; }
 :focus-visible { outline: 2px solid #628d75; outline-offset: 2px; }
 
 .container {
-  width: min(100% - 36px, 1080px);
+  width: min(100% - 36px, 960px);
   margin: 38px auto;
 }
 
@@ -250,10 +250,12 @@ button { cursor: pointer; touch-action: manipulation; }
 .completed-tag { background: var(--background); color: var(--muted); border: 1px solid var(--border); }
 
 .presentation {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   padding: 17px;
   border: 1px solid var(--border);
   border-radius: 11px;
-  margin-bottom: 12px;
 }
 
 .presentation h3 { font-size: 14px; margin-bottom: 10px; overflow-wrap: anywhere; }
@@ -267,8 +269,15 @@ button { cursor: pointer; touch-action: manipulation; }
   overflow-wrap: anywhere;
 }
 
+/* Presentation lists: a grid, so cards keep a readable width on laptops */
+#overview, #ready-list, #unready-list, #completed-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+#overview > .empty, #ready-list > .empty, #unready-list > .empty, #completed-list > .empty { grid-column: 1 / -1; }
+@media (min-width: 900px) {
+  #overview, #ready-list, #unready-list, #completed-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+}
+
 /* Edit Presentation action (public editing: no login) */
-.presentation-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+.presentation-actions { display: flex; margin-top: auto; padding-top: 16px; }
 .edit-btn {
   border: 1px solid var(--border);
   background: white;
@@ -280,6 +289,7 @@ button { cursor: pointer; touch-action: manipulation; }
 }
 .edit-btn:hover { background: var(--green-light); }
 .presentation-actions { flex-wrap: wrap; gap: 8px; }
+.presentation-actions .edit-btn { flex: 1 1 140px; padding: 9px 14px; }
 .complete-btn { background: var(--green); color: var(--white); border-color: var(--green); }
 .complete-btn:hover { background: #0f2c24; }
 .presentation-completed .complete-btn { background: white; color: var(--green); border-color: var(--border); }
@@ -450,7 +460,7 @@ textarea { min-height: 95px; resize: vertical; }
 
 @media (max-width: 650px) {
   .container {
-    width: min(100% - 22px, 1080px);
+    width: min(100% - 22px, 960px);
     margin: 15px auto;
   }
 
@@ -522,27 +532,29 @@ textarea { min-height: 95px; resize: vertical; }
 
 /* CONTROL CENTER (Step 5): department directory + hint under the name field. Reuses everything above. */
 
-.dept-list { list-style: none; border-top: 1px solid var(--border); }
+.dept-list { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
 .dept-list:empty { display: none; }
 
 .dept-row {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: space-between;
   gap: 16px;
-  padding: 15px 2px;
-  border-bottom: 1px solid var(--border);
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
 }
 
 .dept-name { min-width: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 
-.dept-open { display: inline-block; flex: none; text-decoration: none; white-space: nowrap; }
+.dept-open { display: block; flex: none; text-align: center; text-decoration: none; white-space: nowrap; padding: 9px 14px; }
 
 .field-hint { color: var(--muted); font-size: 12px; line-height: 1.4; }
 .field-hint:empty { display: none; }
 
 @media (max-width: 650px) {
-  .dept-open { min-height: 44px; display: inline-flex; align-items: center; padding: 10px 16px; }
+  .dept-open { min-height: 44px; display: flex; align-items: center; justify-content: center; padding: 10px 16px; }
 }
 
 /* SHARE LINK button (Step 6): same outlined style as .register-button, placed next to it in the header. */
@@ -560,3 +572,8 @@ textarea { min-height: 95px; resize: vertical; }
   font-size: 13px;
 }
 @media (prefers-reduced-motion: reduce) { .share-button:hover svg { transform: none; } }
+
+/* Control Center link (tracker) and Back button (Control Center): anchors styled like .register-button */
+a.register-button { text-decoration: none; }
+.back-button:hover svg { transform: translateX(-4px); }
+@media (prefers-reduced-motion: reduce) { .back-button:hover svg { transform: none; } }

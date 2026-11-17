@@ -371,14 +371,34 @@ async function register(page, topic, student, avail, challenge) {
     }
 
     // --- sharing
-    const nativeStub = () => { window.__shared = []; navigator.share = d => { window.__shared.push(d); return Promise.resolve(); }; };
+    // Phones: touch is the main input, so the system share sheet is used. (Chromium on a desktop reports a mouse, so the touch query is faked.)
+    const nativeStub = () => { window.__shared = []; navigator.share = d => { window.__shared.push(d); return Promise.resolve(); };
+      const mm = window.matchMedia.bind(window);
+      window.matchMedia = q => /pointer:\s*coarse/.test(q) ? { matches: true, media: q, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return false; } } : mm(q); };
+    // Laptops: the browser offers a share dialog too, but the mouse/trackpad means the link is copied and "Link copied" is shown.
+    const laptopStub = () => { window.__shared = []; navigator.share = d => { window.__shared.push(d); return Promise.resolve(); };
+      window.__copied = []; Object.defineProperty(window, "isSecureContext", { value: true, configurable: true });
+      Object.defineProperty(navigator, "clipboard", { value: { writeText: t => { window.__copied.push(t); return Promise.resolve(); } }, configurable: true }); };
     // The test origin is plain http (a real GitHub Pages address is https), so the secure-context flag is stubbed for the clipboard path.
     const clipStub = () => { window.__copied = []; Object.defineProperty(window, "isSecureContext", { value: true, configurable: true });
       Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
       Object.defineProperty(navigator, "clipboard", { value: { writeText: t => { window.__copied.push(t); return Promise.resolve(); } }, configurable: true }); };
     const noneStub = () => { Object.defineProperty(navigator, "share", { value: undefined, configurable: true }); Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
       document.execCommand = () => false; };
-    for (const [label, viewport] of [["desktop", { width: 1280, height: 800 }], ["phone 375", { width: 375, height: 700 }]]) {
+    {
+      const s = await newPage(browser, { viewport: { width: 1280, height: 800 }, shareStub: laptopStub });
+      await s.page.goto(O + "/control.html"); await dirReady(s.page);
+      await s.page.click("#share-link");
+      ok("desktop: Control Center share copies its own address (no share dialog) and says 'Link copied'",
+        (await s.page.evaluate(() => window.__shared)).length === 0 && (await s.page.evaluate(() => window.__copied)).join() === O + "/control.html" && /Link copied/.test(await s.page.locator("#share-toast, #toast").first().innerText()));
+      await s.page.goto(O + "/surgery"); await settle(s.page);
+      await s.page.click("#share-link");
+      ok("desktop: the Surgery page copies the Surgery address and says 'Link copied'",
+        (await s.page.evaluate(() => window.__shared)).length === 0 && (await s.page.evaluate(() => window.__copied)).join() === O + "/surgery" && /Link copied/.test(await s.page.locator("#toast").innerText()));
+      ok("desktop: sharing produced no script errors", s.errors.length === 0, s.errors.join(" | "));
+      await s.page.close();
+    }
+    for (const [label, viewport] of [["desktop", { width: 1280, height: 800 }], ["phone 375", { width: 375, height: 700 }]].slice(1)) {
       let s = await newPage(browser, { viewport, shareStub: nativeStub });
       await s.page.goto(O + "/control.html"); await dirReady(s.page);
       const controlUrl = s.page.url();

@@ -44,11 +44,13 @@ const shaBefore = Object.fromEntries(guarded.map(f => [f, sha(f)]));
 
 // Stand-ins installed BEFORE the page's scripts run.
 const MODES = {
-  native: `window.__shared = []; navigator.share = async d => { window.__shared.push(d); };
+  native: `const __mm = window.matchMedia.bind(window); window.matchMedia = q => /pointer:\\s*coarse/.test(q) ? { matches: true, media: q, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return false; } } : __mm(q); window.__shared = []; navigator.share = async d => { window.__shared.push(d); };
            window.__copied = []; Object.defineProperty(navigator, "clipboard", { value: { writeText: async t => { window.__copied.push(t); } }, configurable: true });`,
-  nativeCancel: `window.__shared = []; navigator.share = async d => { window.__shared.push(d); const e = new Error("cancel"); e.name = "AbortError"; throw e; };
+  nativeCancel: `const __mm = window.matchMedia.bind(window); window.matchMedia = q => /pointer:\\s*coarse/.test(q) ? { matches: true, media: q, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return false; } } : __mm(q); window.__shared = []; navigator.share = async d => { window.__shared.push(d); const e = new Error("cancel"); e.name = "AbortError"; throw e; };
            window.__copied = []; Object.defineProperty(navigator, "clipboard", { value: { writeText: async t => { window.__copied.push(t); } }, configurable: true });`,
-  nativeBroken: `navigator.share = async () => { throw new Error("NotAllowedError-ish"); };
+  nativeBroken: `const __mm = window.matchMedia.bind(window); window.matchMedia = q => /pointer:\\s*coarse/.test(q) ? { matches: true, media: q, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return false; } } : __mm(q); navigator.share = async () => { throw new Error("NotAllowedError-ish"); };
+           window.__copied = []; Object.defineProperty(navigator, "clipboard", { value: { writeText: async t => { window.__copied.push(t); } }, configurable: true });`,
+  laptopWithShare: `window.__shared = []; navigator.share = async d => { window.__shared.push(d); };
            window.__copied = []; Object.defineProperty(navigator, "clipboard", { value: { writeText: async t => { window.__copied.push(t); } }, configurable: true });`,
   clipboard: `Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
            window.__copied = []; Object.defineProperty(navigator, "clipboard", { value: { writeText: async t => { window.__copied.push(t); } }, configurable: true });`,
@@ -145,6 +147,17 @@ const box = (page, sel) => page.locator(sel).boundingBox();
     await page.waitForSelector(".toast.show");
     ok("native share that fails for another reason falls back to copying", (await copied(page)).join() === a.origin + "/surgery" && /Link copied/.test(await toast(page)), JSON.stringify(await copied(page)) + " " + await toast(page));
     await page.close();
+
+    for (const [label, p] of [["Control Center", "/control.html"], ["Pediatrics", "/pediatrics"], ["Surgery", "/surgery"]]) {
+      ({ page } = await newPage(browser, "laptopWithShare")); await page.goto(a.origin + p);
+      if (/control/i.test(label)) await page.waitForSelector(".dept-row"); else await settle(page);
+      await page.click("#share-link");
+      await page.waitForSelector(".toast.show");
+      ok(label + ": on a laptop (mouse/trackpad) the share dialog is skipped; the link is copied and 'Link copied' is shown",
+        (await shared(page)).length === 0 && (await copied(page)).join() === a.origin + (/control/i.test(label) ? "/control.html" : p) && /Link copied/.test(await toast(page)),
+        JSON.stringify(await shared(page)) + " " + JSON.stringify(await copied(page)));
+      await page.close();
+    }
 
     for (const [label, p] of [["Control Center", "/control.html"], ["Pediatrics", "/pediatrics"]]) {
       ({ page } = await newPage(browser, "clipboard")); await page.goto(a.origin + p);

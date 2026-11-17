@@ -224,6 +224,10 @@ async function suite(browser, label, origin, inRepo) {
     await page.goto(a.origin + "/pediatrics"); await settle(page);
     await page.fill("#search", "Appendicitis"); await page.waitForTimeout(300);
     ok("searching for a surgery topic on /pediatrics finds nothing", /No matching presentations/.test(await page.locator("#overview").innerText()));
+    const cardsFor = async q => { await page.fill("#search", q); await page.waitForTimeout(200); return page.locator("#overview .presentation").count(); };
+    ok("search also matches the supervisor's name", (await cardsFor("dr. s")) > 0);
+    ok("search also matches the consultant's name", (await cardsFor("DR. C")) > 0);
+    ok("search ignores case and extra spaces, and every word must match", (await cardsFor("  neonatal   dr. s ")) > 0 && (await cardsFor("neonatal zzzz")) === 0);
     await page.close();
 
     ok("integrity: no duplicate or missing Submission IDs, no empty departments", /Duplicate Submission IDs: 0/.test(ctx.verifyDepartmentData()) &&

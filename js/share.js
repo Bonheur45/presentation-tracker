@@ -7,8 +7,10 @@
  *   - the Control Center (the button has data-share="control")           → the Control Center name and address.
  * No address is written anywhere in the code.
  *
- * Order: native share sheet (phones, some desktops) → clipboard → legacy copy command → a read-only box the
- * user can copy from by hand. Cancelling the native sheet is not an error and shows nothing.
+ * Phones and tablets (touch is the main input): the native share sheet → clipboard → legacy copy command → a
+ * read-only box the user can copy from by hand. Laptops and desktops skip the share sheet, even when the browser
+ * offers one: the link is copied and "Link copied" is shown. Cancelling the native sheet is not an error and
+ * shows nothing.
  */
 (function () {
   "use strict";
@@ -98,6 +100,14 @@
     say("Copy the link shown below.");
   }
 
+  // The system share sheet is for phones and tablets. A laptop's main pointer is a mouse or trackpad, so there the
+  // button copies the link instead (and confirms it), whether or not the browser also offers a share dialog.
+  function useShareSheet() {
+    return typeof navigator.share === "function"
+      && typeof window.matchMedia === "function"
+      && window.matchMedia("(pointer: coarse)").matches;
+  }
+
   /* ---------- click ---------- */
   let busy = false;
   button.addEventListener("click", async () => {
@@ -106,7 +116,7 @@
     if (!page) return;
     busy = true;
     try {
-      if (typeof navigator.share === "function") {
+      if (useShareSheet()) {
         try {
           await navigator.share({ title: page.name, text: page.text, url: page.url });
           return;

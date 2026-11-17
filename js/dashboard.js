@@ -357,13 +357,21 @@ function renderDashboard() {
   renderOverview();
 }
 
+// Lower-case, accent-free, single-spaced text used only for matching searches.
+function searchKey(text) {
+  return String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 function renderOverview() {
   if (!hasLoaded) return;                        // keep the loading / error card until real data exists
-  const query = byId("search").value.trim().toLowerCase();
+  // Search covers the topic and all three names: student, supervisor and consultant. Case and accents are ignored,
+  // and every word typed has to match somewhere ("uwase pneumonia" finds that supervisor's pneumonia topic).
+  const terms = searchKey(byId("search").value).split(" ").filter(Boolean);
   const filter = byId("filter").value;
 
   const filtered = presentations.filter(p => {
-    const matchesSearch = `${p.topic} ${p.student}`.toLowerCase().includes(query);
+    const haystack = searchKey(`${p.topic} ${p.student} ${p.supervisor} ${p.consultant}`);
+    const matchesSearch = terms.every(t => haystack.includes(t));
     // Pending / Completed use completionStatus; Ready / Unready use the backend readiness status.
     // The two are independent: completing a presentation never changes its readiness.
     const matchesFilter =
