@@ -4,7 +4,10 @@
  * It does two things, both through the SAME Apps Script backend the trackers use:
  *   1. lists the active departments (GET ?action=departments: names only, never presentation records);
  *   2. creates a department (POST action=createDepartment): one new row in the existing Departments tab;
- *   3. renames a department (POST action=renameDepartment): only its name changes, never its ID or address.
+ *   3. edits a department (POST action=renameDepartment): its Department / Rotation / Hospital and the name built
+ *      from them change, never its ID or address.
+ * A tracker is named from three parts, e.g. "Internal Medicine, Rotation 1, CHUB". The directory can be searched
+ * (any of the three) and sorted by Department, Rotation or Hospital.
  * Each department opens the ONE reusable tracker (index.html) at  ./?d=<slug>. Nothing is copied per department.
  */
 (function () {
@@ -16,10 +19,14 @@
   const overlay = byId("dept-overlay"), form = byId("dept-form"), nameEl = byId("dept-name");
   const nameErr = byId("dept-name-error"), hintEl = byId("dept-id-hint"), msgEl = byId("dept-message");
   const submitBtn = byId("dept-submit"), openBtn = byId("create-department");
+  const rotEl = byId("dept-rotation"), hospEl = byId("dept-hospital");
+  const rotErr = byId("dept-rotation-error"), hospErr = byId("dept-hospital-error");
+  const searchEl = byId("dept-search"), sortEl = byId("dept-sort"), countEl = byId("dept-count");
 
   const API_URL_PATTERN = /^https:\/\/script\.google\.com\/(?:a\/macros\/[^/]+|macros)\/s\/[^/]+\/exec$/;
-  const NAME_MIN = 2, NAME_MAX = 60;
-  let departments = [];        // [{ id, name, slug }]
+  const LIMITS = { department: 40, rotation: 20, hospital: 25 };       // same as the server (CONFIG.DEPT_PART_MAX)
+  const NAME_MIN = 2;
+  let departments = [];        // [{ id, name, slug, department, rotation, hospital }]
   let loadSeq = 0;             // only the newest directory response may update the screen
 
   class ApiError extends Error {
@@ -64,19 +71,65 @@
     if (!Array.isArray(json.departments)) throw new ApiError("BAD_RESPONSE", "The server sent an unexpected reply. Please try again later.");
     return json.departments
       .filter(d => d && typeof d.id === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(d.id))
-      .map(d => ({ id: d.id, name: String(d.name || d.id), slug: d.id }));
+      .map(d => {
+        const name = String(d.name || d.id);
+        return { id: d.id, name, slug: d.id, department: String(d.department || name), rotation: String(d.rotation || ""), hospital: String(d.hospital || "") };
+      });
   }
 
   /* ---------------- directory ---------------- */
 
+  // Blank values (an older department with no rotation or hospital yet) always sort last, whichever way you sort.
+  const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });     // numeric: Rotation 2 before Rotation 10
+  function cmp(a, b) {
+    if (!a && !b) return 0;
+    if (!a) return 1;
+    if (!b) return -1;
+    return collator.compare(a, b);
+  }
+  const SORT_ORDER = {
+    department: ["department", "rotation", "hospital"],
+    rotation:   ["rotation", "department", "hospital"],
+    hospital:   ["hospital", "department", "rotation"]
+  };
+  function sorted(list, by) {
+    const keys = SORT_ORDER[by] || SORT_ORDER.department;
+    return list.slice().sort((a, b) => {
+      for (const k of keys) { const c = cmp(a[k], b[k]); if (c) return c; }
+      return a.id.localeCompare(b.id);
+    });
+  }
+
+  // Every word typed must appear in the department, the rotation, the hospital or the full name.
+  function matches(d, query) {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return true;
+    const hay = [d.department, d.rotation, d.hospital, d.name].join(" ").toLowerCase();
+    return words.every(w => hay.indexOf(w) !== -1);
+  }
+
   function render() {
     listEl.textContent = "";
-    departments.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })).forEach(d => {
+    const query = searchEl.value.replace(/\s+/g, " ").trim();
+    const shown = sorted(departments.filter(d => matches(d, query)), sortEl.value);
+    shown.forEach(d => {
       const li = document.createElement("li");
       li.className = "dept-row";
+      const info = document.createElement("div");
+      info.className = "dept-info";
       const name = document.createElement("span");
       name.className = "dept-name";
-      name.textContent = d.name;
+      name.textContent = d.department;
+      const meta = document.createElement("span");
+      meta.className = "dept-meta";
+      const rot = document.createElement("span");
+      rot.className = "dept-rotation" + (d.rotation ? "" : " unset");
+      rot.textContent = d.rotation || "Rotation not set";
+      const hosp = document.createElement("span");
+      hosp.className = "dept-hospital" + (d.hospital ? "" : " unset");
+      hosp.textContent = d.hospital || "Hospital not set";
+      meta.append(rot, hosp);
+      info.append(name, meta);
       const a = document.createElement("a");
       a.className = "edit-btn dept-open";
       a.href = "./?d=" + encodeURIComponent(d.slug);             // the one reusable tracker, opened for this department
@@ -85,17 +138,23 @@
       const edit = document.createElement("button");
       edit.type = "button";
       edit.className = "edit-btn dept-edit";
-      edit.textContent = "Edit name";
-      edit.setAttribute("aria-label", "Edit the name of " + d.name);
+      edit.textContent = "Edit details";
+      edit.setAttribute("aria-label", "Edit the details of " + d.name);
       edit.addEventListener("click", () => openModal(d));
       const actions = document.createElement("div");
       actions.className = "dept-actions";
       actions.append(edit, a);
-      li.append(name, actions);
+      li.append(info, actions);
       listEl.appendChild(li);
     });
-    emptyEl.classList.toggle("hidden", departments.length > 0);
-    if (!departments.length) { emptyEl.className = "empty"; emptyEl.textContent = "No departments yet. Use Create Department to add one."; }
+    countEl.textContent = departments.length && query ? "Showing " + shown.length + " of " + departments.length : "";
+    if (!departments.length) {
+      emptyEl.classList.remove("hidden"); emptyEl.className = "empty"; emptyEl.textContent = "No departments yet. Use Create Department to add one.";
+    } else if (!shown.length) {
+      emptyEl.classList.remove("hidden"); emptyEl.className = "empty"; emptyEl.textContent = "No departments match “" + query + "”.";
+    } else {
+      emptyEl.classList.add("hidden");
+    }
   }
 
   async function loadDepartments() {
@@ -121,7 +180,8 @@
 
   /* ---------------- Create Department ---------------- */
 
-  // Same rule as the server (Code.gs slugFromName_), used only for the preview; the server's answer is the real ID.
+  // Same rules as the server (Code.gs slugFromName_ / rotationSlug_ / slugFromParts_), used only for the preview;
+  // the server's answer is the real ID.
   function slugFromName(name) {
     let s = String(name || "");
     if (s.normalize) s = s.normalize("NFD");
@@ -129,34 +189,63 @@
     if (s.length > 40) s = s.slice(0, 40).replace(/-+$/g, "");
     return s;
   }
-
-  function setMessage(text, kind) { msgEl.textContent = text; msgEl.className = "message" + (kind ? " " + kind : ""); }
-  function setNameError(text) { nameErr.textContent = text; nameEl.classList.toggle("invalid", !!text); }
-
-  function updateHint() {
-    if (editing) { hintEl.textContent = "The address stays the same: " + editing.id + ". Only the name changes."; return; }
-    const slug = slugFromName(nameEl.value);
-    hintEl.textContent = slug ? "Department ID and address: " + slug : "";
+  function rotationSlug(rotation) {
+    const m = /^(?:rotation|rot|r)?[\s.#-]*(\d{1,3})$/i.exec(String(rotation).trim());
+    return m ? "r" + Number(m[1]) : slugFromName(rotation);
+  }
+  function slugFromParts(department, rotation, hospital) {
+    const tail = [rotationSlug(rotation), slugFromName(hospital)].filter(Boolean).join("-");
+    let head = slugFromName(department);
+    const room = 40 - (tail ? tail.length + 1 : 0);
+    if (head.length > room) head = head.slice(0, Math.max(room, 8)).replace(/-+$/g, "");
+    let s = [head, tail].filter(Boolean).join("-");
+    if (s.length > 40) s = s.slice(0, 40).replace(/-+$/g, "");
+    return s;
   }
 
-  let closeTimer = null, saving = false, pending = null;       // pending = { name, requestId } kept until the save succeeds
-  let opener = null;
-  let editing = null;                                          // the department being renamed, or null while creating one
+  const FIELDS = {
+    department: { el: nameEl, err: nameErr, label: "department" },
+    rotation:   { el: rotEl,  err: rotErr,  label: "rotation" },
+    hospital:   { el: hospEl, err: hospErr, label: "hospital" }
+  };
+  const clean = el => el.value.replace(/\s+/g, " ").trim();
+  function values() { return { department: clean(nameEl), rotation: clean(rotEl), hospital: clean(hospEl) }; }
 
-  // openModal()  → Create Department;   openModal(department) → Edit name for that department.
+  function setMessage(text, kind) { msgEl.textContent = text; msgEl.className = "message" + (kind ? " " + kind : ""); }
+  function setFieldError(key, text) { FIELDS[key].err.textContent = text; FIELDS[key].el.classList.toggle("invalid", !!text); }
+  function clearFieldErrors() { Object.keys(FIELDS).forEach(k => setFieldError(k, "")); }
+
+  function updateHint() {
+    const v = values();
+    const full = [v.department, v.rotation, v.hospital].filter(Boolean).join(", ");
+    if (editing) {
+      hintEl.textContent = "Tracker name: " + (full || "—") + ". The address stays the same: " + editing.id + ". Only the details change.";
+      return;
+    }
+    const slug = v.department && v.rotation && v.hospital ? slugFromParts(v.department, v.rotation, v.hospital) : "";
+    hintEl.textContent = full ? "Tracker name: " + full + (slug ? ". Department ID and address: " + slug : "") : "";
+  }
+
+  let closeTimer = null, saving = false, pending = null;       // pending = { key, requestId } kept until the save succeeds
+  let opener = null;
+  let editing = null;                                          // the department being edited, or null while creating one
+
+  // openModal()  → Create Department;   openModal(department) → Edit details for that department.
   function openModal(dept) {
     clearTimeout(closeTimer);
     opener = document.activeElement;
     editing = dept && dept.id ? dept : null;
-    form.reset(); setNameError(""); setMessage("", ""); pending = null;
-    byId("dept-title").textContent = editing ? "Edit Department Name" : "Create Department";
+    form.reset(); clearFieldErrors(); setMessage("", ""); pending = null;
+    byId("dept-title").textContent = editing ? "Edit Department Details" : "Create Department";
     byId("dept-intro").textContent = editing ? "Everyone who uses this tracker will see the new name." : "The new tracker uses the same database and starts empty.";
-    submitBtn.textContent = editing ? "SAVE NAME" : "CREATE DEPARTMENT";
-    if (editing) nameEl.value = editing.name;
+    submitBtn.textContent = editing ? "SAVE DETAILS" : "CREATE DEPARTMENT";
+    if (editing) { nameEl.value = editing.department; rotEl.value = editing.rotation; hospEl.value = editing.hospital; }
     updateHint();
     overlay.classList.add("open"); document.body.classList.add("modal-open");
-    nameEl.focus();
-    if (editing) nameEl.select();
+    // An older department has no rotation or hospital yet: start on the first empty box.
+    const first = editing ? [nameEl, rotEl, hospEl].filter(el => !el.value)[0] : nameEl;
+    (first || nameEl).focus();
+    if (editing && !first) nameEl.select();
   }
 
   function closeModal() {
@@ -171,21 +260,37 @@
     return "dept-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
   }
 
-  function checkName(name) {
-    if (name.length < NAME_MIN) return "Enter the department name.";
-    if (name.length > NAME_MAX) return "Keep the name to " + NAME_MAX + " characters or fewer.";
-    if (/^[=+\-@]/.test(name)) return "The name cannot start with = + - or @.";
-    if (/[<>]/.test(name)) return "The name cannot contain < or >.";
-    if (!slugFromName(name)) return "Use letters or numbers in the name.";
-    return "";
+  // → { department, rotation, hospital } with a message for every box that is not acceptable (empty object = fine).
+  function checkValues(v) {
+    const problems = {};
+    Object.keys(FIELDS).forEach(k => {
+      const text = v[k], label = FIELDS[k].label, max = LIMITS[k];
+      if (text.length < (k === "department" ? NAME_MIN : 1)) problems[k] = "Enter the " + label + ".";
+      else if (text.length > max) problems[k] = "Keep the " + label + " to " + max + " characters or fewer.";
+      else if (/^[=+\-@]/.test(text)) problems[k] = "The " + label + " cannot start with = + - or @.";
+      else if (/[<>]/.test(text)) problems[k] = "The " + label + " cannot contain < or >.";
+      else if (!slugFromName(text)) problems[k] = "Use letters or numbers in the " + label + ".";
+    });
+    return problems;
   }
 
-  async function createDepartment(name) {
-    if (!pending || pending.name !== name) pending = { name, requestId: newRequestId() };
+  // Shows the server's per-field messages ({ department, rotation, hospital }, or the old { name }) on the boxes.
+  function showServerFields(fields) {
+    if (!fields) return false;
+    let shown = false;
+    const map = { name: "department", department: "department", rotation: "rotation", hospital: "hospital" };
+    Object.keys(fields).forEach(k => { if (map[k] && fields[k]) { setFieldError(map[k], String(fields[k])); shown = true; } });
+    if (shown) { setMessage("", ""); const bad = Object.keys(FIELDS).filter(k => FIELDS[k].el.classList.contains("invalid"))[0]; if (bad) FIELDS[bad].el.focus(); }
+    return shown;
+  }
+
+  async function createDepartment(v) {
+    const key = JSON.stringify(v);
+    if (!pending || pending.key !== key) pending = { key, requestId: newRequestId() };
     const send = () => requestJson(apiUrl(), {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },   // text/plain: no CORS preflight (Apps Script cannot answer one)
-      body: JSON.stringify({ action: "createDepartment", requestId: pending.requestId, name })
+      body: JSON.stringify({ action: "createDepartment", requestId: pending.requestId, department: v.department, rotation: v.rotation, hospital: v.hospital })
     }, APP_CONFIG.SUBMIT_TIMEOUT_MS);
     try {
       return await send();
@@ -197,38 +302,44 @@
     }
   }
 
-  async function renameDepartment(dept, name) {
+  async function renameDepartment(dept, v) {
     const send = () => requestJson(apiUrl(), {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: "renameDepartment", departmentId: dept.id, name })
+      body: JSON.stringify({ action: "renameDepartment", departmentId: dept.id, department: v.department, rotation: v.rotation, hospital: v.hospital })
     }, APP_CONFIG.SUBMIT_TIMEOUT_MS);
     try {
       return await send();
     } catch (err) {
       if (err.code !== "NETWORK" && err.code !== "TIMEOUT") throw err;
       await new Promise(r => setTimeout(r, APP_CONFIG.SUBMIT_RETRY_DELAY_MS));
-      return await send();                                       // renaming to the same text twice changes nothing, so the retry is safe
+      return await send();                                       // saving the same details twice changes nothing, so the retry is safe
     }
   }
 
-  async function onRename(name) {
+  function fromServer(d, fallback) {
+    const name = String(d.name || fallback.name);
+    return { id: d.id, name, slug: d.id, department: String(d.department || fallback.department), rotation: String(d.rotation || ""), hospital: String(d.hospital || "") };
+  }
+
+  async function onRename(v) {
     const dept = editing;
-    saving = true; submitBtn.disabled = true; setMessage("Saving name…", "info");
+    saving = true; submitBtn.disabled = true; setMessage("Saving details…", "info");
     try {
-      const json = await renameDepartment(dept, name);
+      const json = await renameDepartment(dept, v);
       const d = json.department || {};
       if (d.id !== dept.id) throw new ApiError("BAD_RESPONSE", "The server sent an unexpected reply. Please try again later.");
-      const mine = departments.filter(x => x.id === d.id)[0];
-      if (mine) mine.name = String(d.name || name);
+      const i = departments.findIndex(x => x.id === d.id);
+      const saved = fromServer(d, { name: [v.department, v.rotation, v.hospital].join(", "), department: v.department });
+      if (i !== -1) departments[i] = saved;
       render();
-      setMessage(json.unchanged ? "The name was already “" + name + "”." : "The department is now called “" + (d.name || name) + "”.", "success");
+      setMessage(json.unchanged ? "These details were already saved." : "The tracker is now called “" + saved.name + "”.", "success");
       closeTimer = setTimeout(closeModal, 1200);
       loadDepartments();
     } catch (err) {
-      if (err.fields && err.fields.name) { setNameError(err.fields.name); setMessage("", ""); nameEl.focus(); }
+      if (showServerFields(err.fields)) { /* shown on the boxes */ }
       else if (err.code === "NETWORK" || err.code === "TIMEOUT") {
-        setMessage("Could not confirm that the name was saved. Check the directory, or press Save again (it is safe).", "error");
+        setMessage("Could not confirm that the details were saved. Check the directory, or press Save again (it is safe).", "error");
       } else setMessage(err.message, "error");
     } finally {
       saving = false; submitBtn.disabled = false;
@@ -238,25 +349,27 @@
   async function onSubmit(event) {
     event.preventDefault();
     if (saving) return;
-    const name = nameEl.value.replace(/\s+/g, " ").trim();
-    const problem = checkName(name);
-    setNameError(problem); setMessage("", "");
-    if (problem) { nameEl.focus(); return; }
-    if (editing) { onRename(name); return; }
+    const v = values();
+    const problems = checkValues(v);
+    clearFieldErrors(); setMessage("", "");
+    const bad = Object.keys(problems);
+    if (bad.length) { bad.forEach(k => setFieldError(k, problems[k])); FIELDS[bad[0]].el.focus(); return; }
+    if (editing) { onRename(v); return; }
 
     saving = true; submitBtn.disabled = true; setMessage("Creating department…", "info");
     try {
-      const json = await createDepartment(name);
+      const json = await createDepartment(v);
       const d = json.department || {};
       if (typeof d.id !== "string") throw new ApiError("BAD_RESPONSE", "The server sent an unexpected reply. Please try again later.");
       pending = null;
-      if (!departments.some(x => x.id === d.id)) departments.push({ id: d.id, name: String(d.name || d.id), slug: d.id });
+      const saved = fromServer(d, { name: [v.department, v.rotation, v.hospital].join(", "), department: v.department });
+      if (!departments.some(x => x.id === d.id)) departments.push(saved);
       render();                                                  // visible at once; the refresh below confirms it from the database
-      setMessage("“" + (d.name || name) + "” was created and added to the directory.", "success");
+      setMessage("“" + saved.name + "” was created and added to the directory.", "success");
       closeTimer = setTimeout(closeModal, 1400);
       loadDepartments();
     } catch (err) {
-      if (err.fields && err.fields.name) { setNameError(err.fields.name); setMessage("", ""); nameEl.focus(); }
+      if (showServerFields(err.fields)) { /* shown on the boxes */ }
       else if (err.code === "NETWORK" || err.code === "TIMEOUT") {
         setMessage("Could not confirm that the department was created. Check the directory, or press Create again (it is safe).", "error");
       } else setMessage(err.message, "error");
@@ -271,7 +384,9 @@
   byId("dept-close").addEventListener("click", closeModal);
   overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(); });
   form.addEventListener("submit", onSubmit);
-  nameEl.addEventListener("input", () => { updateHint(); if (nameErr.textContent) setNameError(""); });
+  Object.keys(FIELDS).forEach(k => FIELDS[k].el.addEventListener("input", () => { updateHint(); if (FIELDS[k].err.textContent) setFieldError(k, ""); }));
+  searchEl.addEventListener("input", render);
+  sortEl.addEventListener("change", render);
   retryBtn.addEventListener("click", loadDepartments);
   document.addEventListener("keydown", e => {
     if (!overlay.classList.contains("open")) return;

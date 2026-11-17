@@ -64,6 +64,7 @@ dsh.getRange(2, 1, 1, 4).setValues([["medicine", "Internal Medicine", "medicine"
 
 /* =============================== PART B: browser =============================== */
 const requests = [];
+let directoryDelayMs = 0;
 const server = http.createServer((req, res) => {
   const p = path.join(ROOT, decodeURIComponent(new URL(req.url, "http://x").pathname));
   fs.readFile(p, (err, buf) => { if (err) { res.writeHead(404); res.end(); return; } res.writeHead(200, { "Content-Type": MIME[path.extname(p)] || "application/octet-stream" }); res.end(buf); });
@@ -77,7 +78,11 @@ async function newPage(browser, viewport) {
     const headers = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" };
     let text;
     if (req.method() === "POST") { requests.push(JSON.parse(req.postData())); text = ctx.doPost({ postData: { contents: req.postData() } }).text; }
-    else text = ctx.doGet({ parameter: Object.fromEntries(new URL(req.url()).searchParams.entries()) }).text;
+    else {
+      const parameter = Object.fromEntries(new URL(req.url()).searchParams.entries());
+      if (parameter.action === "departments" && directoryDelayMs) await new Promise(r => setTimeout(r, directoryDelayMs));
+      text = ctx.doGet({ parameter }).text;
+    }
     await route.fulfill({ status: 200, headers, body: text });
   });
   return { page, errors };
@@ -139,13 +144,42 @@ async function newPage(browser, viewport) {
     await t1.page.waitForFunction(() => document.querySelector(".header-org").textContent === "Paediatrics and Child Health", null, { timeout: 8000 });
     ok("a department listed in config.js (pediatrics) shows its new name in the heading and title", (await t1.page.title()).endsWith("Paediatrics and Child Health"));
     await t1.page.close();
+    const heading = pg => pg.locator(".header-org").innerText();
+    const t0 = await newPage(browser);
+    await t0.page.goto(origin + "/index.html");
+    await t0.page.waitForSelector("#overview .presentation, #overview .empty");
+    await t0.page.waitForTimeout(600);
+    ok("Internal Medicine that has NOT been renamed keeps its organisation: 'Internal Medicine, CHUK'", (await heading(t0.page)) === "Internal Medicine, CHUK", await heading(t0.page));
+    await t0.page.close();
+
     post({ action: "renameDepartment", departmentId: "medicine", name: "Internal Medicine Adult" });
     const t2 = await newPage(browser);
     await t2.page.goto(origin + "/index.html");
-    await t2.page.waitForFunction(() => /Internal Medicine Adult/.test(document.querySelector(".header-org").textContent), null, { timeout: 8000 });
-    ok("the default tracker keeps its organisation after the name (CHUK)", (await t2.page.locator(".header-org").innerText()) === "Internal Medicine Adult, CHUK");
+    await t2.page.waitForFunction(() => document.querySelector(".header-org").textContent === "Internal Medicine Adult", null, { timeout: 8000 });
+    ok("after a rename the heading is exactly the new name: no CHUK is presumed", (await heading(t2.page)) === "Internal Medicine Adult" && (await t2.page.title()).endsWith("Internal Medicine Adult") && !/CHUK/.test(await t2.page.title()));
     ok("the tracker still loads its own presentations after the rename", (await t2.page.locator("#total").innerText()) !== "");
     ok("trackers: no script errors", t1.errors.length === 0 && t2.errors.length === 0, t1.errors.concat(t2.errors).join(" | "));
+
+    directoryDelayMs = 1500;
+    await t2.page.reload();
+    await t2.page.waitForSelector(".header-org");
+    ok("on a repeat visit the new name is there at once, before the server has answered (no flash of the old name or CHUK)", (await heading(t2.page)) === "Internal Medicine Adult", await heading(t2.page));
+    directoryDelayMs = 0;
+    await t2.page.close();
+
+    post({ action: "renameDepartment", departmentId: "medicine", name: "Internal Medicine" });
+    const t4 = await newPage(browser);
+    await t4.page.goto(origin + "/index.html");
+    await t4.page.waitForTimeout(900);
+    ok("renaming it back to the original name brings its organisation back", (await heading(t4.page)) === "Internal Medicine, CHUK", await heading(t4.page));
+    await t4.page.close();
+
+    post({ action: "renameDepartment", departmentId: "medicine", name: "Internal Medicine, CHUK" });
+    const t5 = await newPage(browser);
+    await t5.page.goto(origin + "/index.html");
+    await t5.page.waitForFunction(() => document.querySelector(".header-org").textContent === "Internal Medicine, CHUK");
+    ok("typing 'Internal Medicine, CHUK' as the name shows exactly that (the organisation is part of the name, not added)", (await heading(t5.page)) === "Internal Medicine, CHUK");
+    await t5.page.close();
     const made = post({ action: "createDepartment", name: "Radiology" });
     post({ action: "renameDepartment", departmentId: "radiology", name: "Radiology and Imaging" });
     const t3 = await newPage(browser);

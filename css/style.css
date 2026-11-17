@@ -547,6 +547,20 @@ textarea { min-height: 95px; resize: vertical; }
 }
 
 .dept-name { min-width: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.dept-info { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.dept-meta { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.dept-rotation, .dept-hospital {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.dept-rotation.unset, .dept-hospital.unset { color: var(--muted); font-weight: 400; border-style: dashed; }
+.dept-tools { margin-bottom: 14px; }
+.dept-count { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+.dept-count:empty { display: none; }
 
 .dept-open { display: block; flex: none; text-align: center; text-decoration: none; white-space: nowrap; padding: 9px 14px; }
 .dept-actions { display: flex; gap: 10px; }

@@ -84,3 +84,9 @@ All of this ran in the same emulated environment as above (real `Code.gs` in Nod
 ## Honest status
 
 The application logic, validation, security controls and user interface are tested and working in simulation. **Live deployment is not complete and has not been verified.** The remaining risk is concentrated in item 1 above, and the live test table in `DEPLOYMENT.md` (part 5) is written to close it.
+
+
+## Step 10 — Department, Rotation, Hospital
+- `tests/step10-parts.js`: 33 backend checks pass (real `Code.gs` on the in-memory Sheets imitation). `step2-simulation.js` (40) and `step3-simulation.js` (35) still pass.
+- `tests/step10-control-jsdom.js`: 29 checks pass (real `control.html` + `control.js` in jsdom): search, Sort by Department / Rotation / Hospital, create, duplicate refusal, edit of an older department.
+- **Not run:** Chromium was not available, so `step5-control-center.js` and `step9-rename.js` browser parts were not re-run. They drive the old single-name form and will need updating. Visual layout of the new fields and cards is unchecked. Nothing was run against real Google Sheets or Apps Script.

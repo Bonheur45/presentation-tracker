@@ -25,6 +25,7 @@ There is **no login, no account, no password and no role-based restriction**, by
 | File | Read it for |
 |---|---|
 | `docs/STEP7_FINAL_INTEGRATION.md` | **Final integration review**: what was checked, what was fixed, what is still manual, live test checklist |
+| `docs/STEP10_DEPARTMENT_ROTATION_HOSPITAL.md` | Trackers are named Department + Rotation + Hospital; Control Center search and Sort by |
 | `docs/STEP8_EXPORT.md` | The Download list row: PDF / Excel of a category |
 | `docs/STEP6_SHARE_LINK.md` | The Share Link button on the Control Center and every tracker page |
 | `docs/STEP5_CONTROL_CENTER.md` | The Control Center (`control.html`): department directory and Create Department; what still needs configuring |

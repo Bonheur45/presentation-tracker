@@ -43,6 +43,7 @@ const CONFIG = {
   MAX_BODY_CHARS: 20000,
   DEPT_NAME_MIN: 2,             // Create Department (Step 5): name length limits
   DEPT_NAME_MAX: 60,
+  DEPT_PART_MAX: { department: 40, rotation: 20, hospital: 25 },   // Department / Rotation / Hospital (Control Center)
   MAX_DEPARTMENTS: 100,         // upper bound on the Departments tab, so a spammer cannot grow it without limit
   DEPT_CREATE_RATE_MAX: 10,     // max department creations ...
   DEPT_CREATE_RATE_WINDOW_SEC: 600   // ... per 10-minute window, across all visitors
@@ -72,6 +73,12 @@ const HEADERS = [
 // Departments tab: one row per department. Department ID is permanent and unique; it is also the
 // slug used in the department's link, so no separate slug column is needed.
 const DEPT_HEADERS = ["Department ID", "Department Name", "Department URL or Slug", "Active Status"];
+// Columns E–G hold the three parts the tracker's name is built from, e.g. Internal Medicine | Rotation 1 | CHUB.
+// "Department Name" (B) stays the full display name ("Internal Medicine, Rotation 1, CHUB"); E–G exist so the
+// Control Center can search and sort by each part. Sheets that only have A–D are upgraded in place; a row whose
+// E–G are blank is an older department and is read as: Department = its name, Rotation and Hospital not set.
+const DEPT_EXTRA_HEADERS = ["Department", "Rotation", "Hospital"];
+const DEPT_ALL_HEADERS = DEPT_HEADERS.concat(DEPT_EXTRA_HEADERS);
 const DEPT_ACTIVE = "ACTIVE";
 const DEPT_INACTIVE = "INACTIVE";
 const DEPT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;   // lowercase letters, digits, single hyphens
@@ -333,21 +340,27 @@ function setUpSheet_(ss) {
 function setUpDepartmentsSheet_(ss) {
   let sh = ss.getSheetByName(CONFIG.DEPARTMENTS_SHEET_NAME);
   if (!sh) sh = ss.insertSheet(CONFIG.DEPARTMENTS_SHEET_NAME);
-  if (sh.getMaxColumns() < DEPT_HEADERS.length) sh.insertColumnsAfter(sh.getMaxColumns(), DEPT_HEADERS.length - sh.getMaxColumns());
+  const total = DEPT_ALL_HEADERS.length;
+  if (sh.getMaxColumns() < total) sh.insertColumnsAfter(sh.getMaxColumns(), total - sh.getMaxColumns());
   if (sh.getLastRow() === 0) {
-    sh.getRange(1, 1, 1, DEPT_HEADERS.length).setValues([DEPT_HEADERS]);
+    sh.getRange(1, 1, 1, total).setValues([DEPT_ALL_HEADERS]);
   } else {
-    const found = sh.getRange(1, 1, 1, DEPT_HEADERS.length).getValues()[0];
+    const found = sh.getRange(1, 1, 1, total).getValues()[0];
     if (DEPT_HEADERS.some((h, i) => String(found[i]).trim() !== h)) {
       throw new Error("Sheet '" + CONFIG.DEPARTMENTS_SHEET_NAME + "' headers do not match the expected schema (row 1, columns A–D).");
     }
+    DEPT_EXTRA_HEADERS.forEach((h, i) => {                       // upgrade an A–D sheet in place: add the E–G headers
+      const cell = String(found[DEPT_HEADERS.length + i]).trim();
+      if (cell === "") sh.getRange(1, DEPT_HEADERS.length + i + 1).setValue(h);
+      else if (cell !== h) throw new Error("Sheet '" + CONFIG.DEPARTMENTS_SHEET_NAME + "' headers do not match the expected schema (row 1, columns E–G).");
+    });
   }
-  sh.getRange(1, 1, 1, DEPT_HEADERS.length)
+  sh.getRange(1, 1, 1, total)
     .setBackground("#173c32").setFontColor("#ffffff").setFontWeight("bold").setWrap(true);
   sh.setFrozenRows(1);
-  [150, 220, 220, 130].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  [150, 280, 220, 130, 200, 120, 160].forEach((w, i) => sh.setColumnWidth(i + 1, w));
   const rows = Math.max(sh.getMaxRows() - 1, 1);
-  sh.getRange(2, 1, rows, DEPT_HEADERS.length).setNumberFormat("@");        // plain text, never formulas
+  sh.getRange(2, 1, rows, total).setNumberFormat("@");        // plain text, never formulas
   sh.getRange(2, 4, rows, 1).setDataValidation(SpreadsheetApp.newDataValidation()
     .requireValueInList([DEPT_ACTIVE, DEPT_INACTIVE], true).setAllowInvalid(false)
     .setHelpText("Choose: ACTIVE or INACTIVE.").build());
@@ -355,21 +368,25 @@ function setUpDepartmentsSheet_(ss) {
   const known = readDepartments_(ss);
   if (!known.some(d => d.id === CONFIG.DEFAULT_DEPARTMENT_ID)) {
     const row = Math.max(sh.getLastRow(), 1) + 1;
-    sh.getRange(row, 1, 1, DEPT_HEADERS.length)
+    sh.getRange(row, 1, 1, total)
       .setNumberFormat("@")
-      .setValues([[CONFIG.DEFAULT_DEPARTMENT_ID, "Internal Medicine", CONFIG.DEFAULT_DEPARTMENT_ID, DEPT_ACTIVE]]);
+      .setValues([[CONFIG.DEFAULT_DEPARTMENT_ID, "Internal Medicine", CONFIG.DEFAULT_DEPARTMENT_ID, DEPT_ACTIVE, "", "", ""]]);
   }
   return sh;
 }
 
-// All rows of the Departments tab as {id, name, slug, active}. Returns [] if the tab does not exist yet.
+// All rows of the Departments tab as {id, name, slug, active, department, rotation, hospital}. Returns [] if the tab
+// does not exist yet. department/rotation/hospital are "" for a department created before those columns existed.
 function readDepartments_(ss) {
   const sh = ss.getSheetByName(CONFIG.DEPARTMENTS_SHEET_NAME);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, DEPT_HEADERS.length).getValues()
+  const width = Math.min(sh.getMaxColumns(), DEPT_ALL_HEADERS.length);
+  const cell = (r, i) => i < r.length ? String(r[i]).trim() : "";
+  return sh.getRange(2, 1, sh.getLastRow() - 1, width).getValues()
     .filter(r => String(r[0]).trim() !== "")
-    .map(r => ({ id: String(r[0]).trim(), name: String(r[1]).trim(), slug: String(r[2]).trim(),
-                 active: String(r[3]).trim().toUpperCase() !== DEPT_INACTIVE }));
+    .map(r => ({ id: cell(r, 0), name: cell(r, 1), slug: cell(r, 2),
+                 active: cell(r, 3).toUpperCase() !== DEPT_INACTIVE,
+                 department: cell(r, 4), rotation: cell(r, 5), hospital: cell(r, 6) }));
 }
 
 // A Department ID cell → its ID. Empty means the default department (Internal Medicine).
@@ -960,9 +977,14 @@ function listDepartments_() {
     const id = d.id.toLowerCase();
     if (!d.active || !DEPT_ID_PATTERN.test(id) || id.length > 40 || seen[id]) return;   // hand-typed junk is skipped
     seen[id] = true;
-    out.push({ id: id, name: d.name || id, slug: id });
+    out.push(departmentPayload_(id, d.name || id, d.department, d.rotation, d.hospital));
   });
   return out;
+}
+
+// What the directory, Create and Edit send back. An older department (blank parts) reads as Department = its name.
+function departmentPayload_(id, name, department, rotation, hospital) {
+  return { id: id, name: name, slug: id, department: department || name, rotation: rotation || "", hospital: hospital || "" };
 }
 
 // "Obstetrics & Gynaecology (Ward)" → "obstetrics-and-gynaecology-ward"; accents dropped; max 40 characters.
@@ -989,12 +1011,70 @@ function validateDepartmentName_(raw) {
   return { name: name, slug: slug };
 }
 
+// Legacy requests send one "name"; newer ones send department + rotation + hospital. Either way the result is
+// { name (the full display name), slug, department, rotation, hospital }. A legacy name leaves the three parts blank.
+function parseDepartmentInput_(body) {
+  if (body && body.department !== undefined && body.department !== null) return validateDepartmentParts_(body);
+  const v = validateDepartmentName_(body ? body.name : undefined);
+  return { name: v.name, slug: v.slug, department: "", rotation: "", hospital: "" };
+}
+
+// "Rotation 1" / "rotation 1" / "R1" / "1" → "r1" (keeps addresses short); anything else → its plain slug.
+function rotationSlug_(rotation) {
+  const m = /^(?:rotation|rot|r)?[\s.#-]*(\d{1,3})$/i.exec(String(rotation).trim());
+  return m ? "r" + Number(m[1]) : slugFromName_(rotation);
+}
+
+// Department ID / address for a new department: internal-medicine-r1-chub (max 40 characters; the department
+// part is shortened first when the whole thing is too long).
+function slugFromParts_(department, rotation, hospital) {
+  const tail = [rotationSlug_(rotation), slugFromName_(hospital)].filter(Boolean).join("-");
+  let head = slugFromName_(department);
+  const room = 40 - (tail ? tail.length + 1 : 0);
+  if (head.length > room) head = head.slice(0, Math.max(room, 8)).replace(/-+$/g, "");
+  let s = [head, tail].filter(Boolean).join("-");
+  if (s.length > 40) s = s.slice(0, 40).replace(/-+$/g, "");
+  return s;
+}
+
+// Department, Rotation and Hospital: all three required, each checked like a department name.
+// Errors are reported per field ({ department, rotation, hospital }) so the form can flag the right box.
+function validateDepartmentParts_(body) {
+  const errors = {};
+  const labels = { department: "department", rotation: "rotation", hospital: "hospital" };
+  const clean = {};
+  ["department", "rotation", "hospital"].forEach(key => {
+    const raw = body[key];
+    const label = labels[key], max = CONFIG.DEPT_PART_MAX[key];
+    if (typeof raw !== "string") { errors[key] = "Enter the " + label + "."; clean[key] = ""; return; }
+    const v = cleanText_(raw, false);
+    clean[key] = v;
+    if (v.length < (key === "department" ? CONFIG.DEPT_NAME_MIN : 1)) errors[key] = "Enter the " + label + ".";
+    else if (v.length > max) errors[key] = "Keep the " + label + " to " + max + " characters or fewer.";
+    else if (FORMULA_START.test(v)) errors[key] = "The " + label + " cannot start with = + - or @.";
+    else if (/[<>]/.test(v)) errors[key] = "The " + label + " cannot contain < or >.";
+    else if (!slugFromName_(v)) errors[key] = "Use letters or numbers in the " + label + ".";
+  });
+  if (Object.keys(errors).length) throw new ApiError("VALIDATION_ERROR", "Please correct the highlighted fields.", errors);
+  const slug = slugFromParts_(clean.department, clean.rotation, clean.hospital);
+  if (!slug || RESERVED_DEPARTMENT_SLUGS.indexOf(slug) !== -1) {
+    throw new ApiError("VALIDATION_ERROR", "Please correct the highlighted fields.", { department: "This name cannot be used. Please choose another." });
+  }
+  return { name: [clean.department, clean.rotation, clean.hospital].join(", "), slug: slug,
+           department: clean.department, rotation: clean.rotation, hospital: clean.hospital };
+}
+
+// The field a "this already exists" error is shown on: the name field of the old form, the department field of the new.
+function duplicateFields_(v) {
+  return (v.department ? { department: "A tracker with this department, rotation and hospital already exists." } : { name: "A department with this name already exists." });
+}
+
 // Creates a department: validates the name, derives the Department ID (= URL slug), checks it is unique and
 // appends ONE row to the existing Departments tab. No new sheet, no new script, no new page. The new
 // department is immediately usable by list/submit/update (they read the Departments tab on every request)
 // and listed by the directory. A repeated requestId returns the original result instead of a second row.
 function handleCreateDepartment_(body) {
-  const v = validateDepartmentName_(body.name);
+  const v = parseDepartmentInput_(body);
   const requestId = normaliseRequestId_(body.requestId);
 
   const lock = LockService.getScriptLock();
@@ -1017,9 +1097,9 @@ function handleCreateDepartment_(body) {
     const existing = readDepartments_(ss);                        // active AND inactive: an ID is never reused
 
     const clash = existing.filter(d => d.id.toLowerCase() === v.slug || d.slug.toLowerCase() === v.slug ||
-      slugFromName_(d.name) === v.slug)[0];
+      slugFromName_(d.name) === v.slug || d.name.toLowerCase() === v.name.toLowerCase())[0];
     if (clash) {
-      throw new ApiError("DUPLICATE", "A department with this name already exists (" + (clash.name || clash.id) + ").", { name: "A department with this name already exists." });
+      throw new ApiError("DUPLICATE", "A department with this name already exists (" + (clash.name || clash.id) + ").", duplicateFields_(v));
     }
     if (existing.length >= CONFIG.MAX_DEPARTMENTS) {
       throw new ApiError("LIMIT_REACHED", "The maximum number of departments has been reached. Please contact the coordinator.");
@@ -1034,11 +1114,11 @@ function handleCreateDepartment_(body) {
     cache.put(key, String(n + 1), CONFIG.DEPT_CREATE_RATE_WINDOW_SEC + 60);
 
     const row = Math.max(sh.getLastRow(), 1) + 1;
-    sh.getRange(row, 1, 1, DEPT_HEADERS.length)
+    sh.getRange(row, 1, 1, DEPT_ALL_HEADERS.length)
       .setNumberFormat("@")
-      .setValues([[v.slug, v.name, v.slug, DEPT_ACTIVE]]);
+      .setValues([[v.slug, v.name, v.slug, DEPT_ACTIVE, v.department, v.rotation, v.hospital]]);
 
-    const department = { id: v.slug, name: v.name, slug: v.slug };
+    const department = departmentPayload_(v.slug, v.name, v.department, v.rotation, v.hospital);
     if (requestId) cache.put("dept_req_" + requestId, JSON.stringify(department), CONFIG.REQUEST_ID_TTL_SEC);
     return { department: department, replayed: false };
   } finally {
@@ -1046,14 +1126,14 @@ function handleCreateDepartment_(body) {
   }
 }
 
-// Renames a department: only the "Department Name" cell (column B) of its row changes. The Department ID and the
+// Edits a department: its name (column B) and, for the new form, Department / Rotation / Hospital (columns E–G). The Department ID and the
 // address (slug) are permanent, because every presentation row and every shared link refers to them, so nothing
 // else moves. The new name is checked like a new department's name and must not belong to ANOTHER department
 // (active or inactive). Renaming to the same text is a harmless no-op. Safe to repeat, so it needs no requestId.
 function handleRenameDepartment_(body) {
   const id = String(body.departmentId == null ? "" : body.departmentId).trim().toLowerCase();
   if (!DEPT_ID_PATTERN.test(id) || id.length > 40) throw new ApiError("UNKNOWN_DEPARTMENT", "Unknown department.");
-  const v = validateDepartmentName_(body.name);
+  const v = parseDepartmentInput_(body);
 
   const lock = LockService.getScriptLock();
   try {
@@ -1066,7 +1146,7 @@ function handleRenameDepartment_(body) {
     const ss = getSpreadsheet_();
     getSheet_();
     const sh = setUpDepartmentsSheet_(ss);
-    const rows = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), DEPT_HEADERS.length).getValues();
+    const rows = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), DEPT_ALL_HEADERS.length).getValues();
     let target = -1;
     const others = [];
     rows.forEach((r, i) => {
@@ -1076,14 +1156,19 @@ function handleRenameDepartment_(body) {
     });
     if (target === -1 || String(rows[target][3]).trim().toUpperCase() === DEPT_INACTIVE) throw new ApiError("UNKNOWN_DEPARTMENT", "Unknown department.");
 
-    const clash = others.filter(d => d.id === v.slug || d.slug === v.slug || slugFromName_(d.name) === v.slug)[0];
+    const clash = others.filter(d => d.id === v.slug || d.slug === v.slug || slugFromName_(d.name) === v.slug ||
+      d.name.toLowerCase() === v.name.toLowerCase())[0];
     if (clash) {
-      throw new ApiError("DUPLICATE", "A department with this name already exists (" + (clash.name || clash.id) + ").", { name: "A department with this name already exists." });
+      throw new ApiError("DUPLICATE", "A department with this name already exists (" + (clash.name || clash.id) + ").", duplicateFields_(v));
     }
 
-    const department = { id: id, name: v.name, slug: id };
-    if (String(rows[target][1]).trim() === v.name) return { department: department, unchanged: true };
+    const department = departmentPayload_(id, v.name, v.department, v.rotation, v.hospital);
+    const row = rows[target];
+    const same = String(row[1]).trim() === v.name && String(row[4]).trim() === v.department &&
+                 String(row[5]).trim() === v.rotation && String(row[6]).trim() === v.hospital;
+    if (same) return { department: department, unchanged: true };
     sh.getRange(target + 2, 2).setNumberFormat("@").setValue(v.name);      // plain text, never a formula
+    sh.getRange(target + 2, 5, 1, 3).setNumberFormat("@").setValues([[v.department, v.rotation, v.hospital]]);
     return { department: department, unchanged: false };
   } finally {
     lock.releaseLock();

@@ -31,13 +31,32 @@
   }
 
   const found = slugFromLocation(window.location);
-  window.DEPARTMENT = has(found.slug)
-    ? Object.freeze({
-        id: found.slug,
-        name: known[found.slug].name,
-        org: known[found.slug].org || ""
-      })
-    : null;
+
+  // The name last seen in the directory (Control Center), kept so a renamed department shows its new name at once
+  // instead of flashing the config.js name first. Only a convenience: the directory is asked on every load.
+  const NAME_KEY = slug => "department-name:" + slug;
+  function readSavedName(slug) {
+    try { return String(window.localStorage.getItem(NAME_KEY(slug)) || "").trim(); } catch (ignore) { return ""; }
+  }
+  function saveName(slug, name) {
+    try {
+      if (name) window.localStorage.setItem(NAME_KEY(slug), name); else window.localStorage.removeItem(NAME_KEY(slug));
+    } catch (ignore) { /* private mode: no cache, nothing else changes */ }
+  }
+
+  // config.js gives a starting name (and an optional organisation, e.g. "CHUK"). Once the department has been RENAMED
+  // in the Control Center its name is shown exactly as typed there, and the organisation from config.js is not added.
+  window.DEPARTMENT = null;
+  if (has(found.slug)) {
+    const base = known[found.slug];
+    const saved = readSavedName(found.slug);
+    const renamed = saved && saved !== base.name;
+    window.DEPARTMENT = Object.freeze({
+      id: found.slug,
+      name: renamed ? saved : base.name,
+      org: renamed ? "" : (base.org || "")
+    });
+  }
   window.DEPARTMENT_REQUESTED = found.slug;      // what the address asked for (shown when it is unknown)
 
   // A department created in the Control Center is not in config.js: ask the backend's directory (names only).
@@ -73,8 +92,13 @@
       const list = Array.isArray(json.departments) ? json.departments : [];
       const hit = list.filter(d => d && d.id === current.id)[0];
       const name = hit ? String(hit.name || "").trim() : "";
-      if (!name || name === current.name) return false;
-      window.DEPARTMENT = Object.freeze({ id: current.id, name: name, org: current.org });   // the ID never changes
+      if (!name) return false;
+      const base = known[current.id];                              // undefined for a department created in the Control Center
+      const renamed = !base || name !== base.name;                 // the name differs from config.js: shown exactly as saved
+      const org = renamed ? "" : (base.org || "");
+      saveName(current.id, renamed ? name : "");
+      if (name === current.name && org === current.org) return false;
+      window.DEPARTMENT = Object.freeze({ id: current.id, name: name, org: org });   // the ID never changes
       return true;
     } catch (ignore) {
       return false;

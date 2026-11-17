@@ -56,7 +56,7 @@ const PAGE_TITLE = "Medical Students Presentation Tracker";
 const PAGE_TAGLINE = document.querySelector(".header-tagline").textContent;   // restored after a department lookup
 
 // Shows which department this page belongs to (department.js). For medicine this is the original
-// "Internal Medicine, CHUK" heading.
+// department heading (e.g. "Internal Medicine, Rotation 1, CHUB").
 function applyDepartmentIdentity() {
   const d = window.DEPARTMENT;
   const label = d.org ? `${d.name}, ${d.org}` : d.name;

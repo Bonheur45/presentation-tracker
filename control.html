@@ -50,7 +50,20 @@
 <div class="content">
   <section id="directory" tabindex="-1">
     <h2 class="section-title">Departments</h2>
+    <div class="dashboard-tools dept-tools">
+      <input id="dept-search" type="search" placeholder="Search department, rotation or hospital…"
+        aria-label="Search by department, rotation or hospital" autocomplete="off">
+      <div class="tool-select">
+        <label for="dept-sort">Sort by</label>
+        <select id="dept-sort">
+          <option value="department">Department</option>
+          <option value="rotation">Rotation</option>
+          <option value="hospital">Hospital</option>
+        </select>
+      </div>
+    </div>
     <p class="sync-status" id="directory-status" role="status" aria-live="polite"></p>
+    <p class="dept-count" id="dept-count" role="status" aria-live="polite"></p>
     <ul class="dept-list" id="department-list" aria-label="Departments"></ul>
     <div id="directory-empty" class="empty">Loading departments…</div>
     <button class="refresh hidden" id="directory-retry" type="button">↻ Try again</button>
@@ -76,10 +89,22 @@
     <form id="dept-form" novalidate>
       <div class="form-grid">
         <div class="field full">
-          <label for="dept-name">Department name</label>
-          <input type="text" id="dept-name" placeholder="e.g. Surgery" maxlength="60" autocomplete="off" required>
-          <p class="field-hint" id="dept-id-hint"></p>
+          <label for="dept-name">Department</label>
+          <input type="text" id="dept-name" placeholder="e.g. Internal Medicine" maxlength="40" autocomplete="off" required>
           <p class="field-error" id="dept-name-error" aria-live="polite"></p>
+        </div>
+        <div class="field">
+          <label for="dept-rotation">Rotation</label>
+          <input type="text" id="dept-rotation" placeholder="e.g. Rotation 1" maxlength="20" autocomplete="off" required>
+          <p class="field-error" id="dept-rotation-error" aria-live="polite"></p>
+        </div>
+        <div class="field">
+          <label for="dept-hospital">Hospital</label>
+          <input type="text" id="dept-hospital" placeholder="e.g. CHUB" maxlength="25" autocomplete="off" required>
+          <p class="field-error" id="dept-hospital-error" aria-live="polite"></p>
+        </div>
+        <div class="field full">
+          <p class="field-hint" id="dept-id-hint"></p>
         </div>
       </div>
       <button class="submit-btn" id="dept-submit" type="submit">CREATE DEPARTMENT</button>

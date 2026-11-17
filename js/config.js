@@ -11,11 +11,11 @@ window.APP_CONFIG = Object.freeze({
 
   // Departments served by this one tracker. The key is the URL slug AND the Department ID stored in the
   // Google Sheet (they are always identical). A department also has to be listed ACTIVE in the sheet's
-  // "Departments" tab, or the backend refuses its requests. `org` (optional) is shown after the name;
+  // "Departments" tab, or the backend refuses its requests. `org` (optional, unused by default) is shown after the name;
   // See docs/STEP4_DEPARTMENT_PAGES.md.
   DEFAULT_DEPARTMENT: "medicine",   // the tracker opened with no department in the address
   DEPARTMENTS: {
-    medicine:   { name: "Internal Medicine",           org: "CHUK" },
+    medicine:   { name: "Internal Medicine" },
     pediatrics: { name: "Pediatrics" },
     surgery:    { name: "Surgery" },
     obgyn:      { name: "Obstetrics and Gynaecology" }
