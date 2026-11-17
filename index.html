@@ -96,6 +96,18 @@
       <button class="refresh" id="refresh" type="button">↻ Refresh</button>
     </div>
     <p class="sync-status" id="sync-status" role="status" aria-live="polite"></p>
+    <div class="export-bar">
+      <label for="export-category">Download list</label>
+      <select id="export-category" aria-label="Category to download">
+        <option value="all">All presentations</option>
+        <option value="pending">Pending presentations</option>
+        <option value="ready">Ready presentations</option>
+        <option value="unready">Unready presentations</option>
+        <option value="completed">Completed presentations</option>
+      </select>
+      <button class="refresh export-btn" id="export-pdf" type="button">PDF</button>
+      <button class="refresh export-btn" id="export-xlsx" type="button">Excel</button>
+    </div>
     <div id="overview"><div class="empty">Loading presentations…</div></div>
   </section>
 
@@ -210,10 +222,11 @@
   </div>
 </div>
 
-<!-- Order matters: config → department → dashboard (data + rendering) → form → app (menu + startup) -->
+<!-- Order matters: config → department → dashboard (data + rendering) → export (PDF / Excel) → form → app (menu + startup) -->
 <script src="js/config.js"></script>
 <script src="js/department.js"></script>
 <script src="js/dashboard.js"></script>
+<script src="js/export.js"></script>
 <script src="js/form.js"></script>
 <script src="js/app.js"></script>
 <script src="js/share.js"></script>

@@ -25,6 +25,7 @@ There is **no login, no account, no password and no role-based restriction**, by
 | File | Read it for |
 |---|---|
 | `docs/STEP7_FINAL_INTEGRATION.md` | **Final integration review**: what was checked, what was fixed, what is still manual, live test checklist |
+| `docs/STEP8_EXPORT.md` | The Download list row: PDF / Excel of a category |
 | `docs/STEP6_SHARE_LINK.md` | The Share Link button on the Control Center and every tracker page |
 | `docs/STEP5_CONTROL_CENTER.md` | The Control Center (`control.html`): department directory and Create Department; what still needs configuring |
 | `docs/MULTI_DEPARTMENT_PLAN.md` | Inspection findings and step-by-step plan for extending this tracker to several departments (planning only; no code changed) |
@@ -56,6 +57,7 @@ js/form.js        registration / edit modal, validation, submission
 js/app.js         menu hooks, department identity, startup
 js/control.js     Control Center logic
 js/share.js       Share Link button (tracker pages and Control Center)
+js/export.js      Download list: PDF / Excel of a category
 apps-script/Code.gs   the ONE Google Apps Script backend (paste into the Sheet's Apps Script editor)
 tests/            automated tests (not needed to run the site): step2 … step7
 ```
@@ -64,6 +66,6 @@ tests/            automated tests (not needed to run the site): step2 … step7
 
 ```
 npm install playwright && npx playwright install chromium     # once, in this folder
-for t in step2-simulation step3-simulation step4-browser step5-control-center step6-share step7-integration; do node tests/$t.js; done
+for t in step2-simulation step3-simulation step4-browser step5-control-center step6-share step7-integration step8-export; do node tests/$t.js; done
 ```
 These run the real `Code.gs` against an in-memory imitation of Google Sheets and the real pages in Chromium. They are **not** tests against real Google Sheets, Apps Script or GitHub Pages.

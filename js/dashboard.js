@@ -354,6 +354,7 @@ function renderDashboard() {
     ? completed.map((p, i) => completedCard(p, i)).join("")
     : '<div class="empty">No completed presentations yet.</div>';
 
+  if (typeof window.updateExportCounts === "function") window.updateExportCounts();   // export.js: counts in the Download list menu
   renderOverview();
 }
 
