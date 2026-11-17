@@ -9,6 +9,18 @@
 window.APP_CONFIG = Object.freeze({
   API_URL: "https://script.google.com/macros/s/AKfycbyUiqI2mOpWP-mmgvf2y46tLbYbKvoJL9MahDQcEfDeQDui7n1hJkRXLCRqEjEUMxSkHQ/exec",                 // e.g. "https://script.google.com/macros/s/AKfycb.../exec"
 
+  // Departments served by this one tracker. The key is the URL slug AND the Department ID stored in the
+  // Google Sheet (they are always identical). A department also has to be listed ACTIVE in the sheet's
+  // "Departments" tab, or the backend refuses its requests. `org` (optional) is shown after the name;
+  // `target` (optional) overrides TARGET below. See docs/STEP4_DEPARTMENT_PAGES.md.
+  DEFAULT_DEPARTMENT: "medicine",   // the tracker opened with no department in the address
+  DEPARTMENTS: {
+    medicine:   { name: "Internal Medicine",           org: "CHUK" },
+    pediatrics: { name: "Pediatrics" },
+    surgery:    { name: "Surgery" },
+    obgyn:      { name: "Obstetrics and Gynaecology" }
+  },
+
   TARGET: 28,                     // presentation target shown as "n / 28"
   REFRESH_INTERVAL_MS: 30000,     // automatic dashboard refresh (30 seconds)
   READ_TIMEOUT_MS: 30000,         // give up waiting for the list after 30 s

@@ -1,3 +1,5 @@
+> **Note (Step 7 final integration):** this report is the earlier single-department report. The test files it names (`gas-mock.js`, `backend.test.js`, `security-check.js`, `e2e*.js`) are **not in this archive**, so its 473-check totals were not re-run. The multi-department work is covered by `tests/step2` … `step7` (437 checks, all passing, in simulation only); see `docs/STEP7_FINAL_INTEGRATION.md`.
+
 # Test Report — Steps 4–7
 
 **Result in one line:** 473 automated checks pass (170 backend, 48 static/security, 255 browser). Steps 5–7 (planned presentation time, public editing, server-side readiness) are described in the section "Steps 5–7" at the end; the rest of this report is the Step 4 report, updated where the later steps changed it. **The live Google + GitHub deployment has NOT been performed or verified.** Do not treat the application as "deployed" until the live test table in `DEPLOYMENT.md` part 5 has been completed.

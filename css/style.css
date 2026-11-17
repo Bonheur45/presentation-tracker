@@ -519,3 +519,44 @@ textarea { min-height: 95px; resize: vertical; }
 @media (prefers-reduced-motion: reduce) {
   .register-button, .register-button svg { transition: none; }
 }
+
+/* CONTROL CENTER (Step 5): department directory + hint under the name field. Reuses everything above. */
+
+.dept-list { list-style: none; border-top: 1px solid var(--border); }
+.dept-list:empty { display: none; }
+
+.dept-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 15px 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dept-name { min-width: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+
+.dept-open { display: inline-block; flex: none; text-decoration: none; white-space: nowrap; }
+
+.field-hint { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.field-hint:empty { display: none; }
+
+@media (max-width: 650px) {
+  .dept-open { min-height: 44px; display: inline-flex; align-items: center; padding: 10px 16px; }
+}
+
+/* SHARE LINK button (Step 6): same outlined style as .register-button, placed next to it in the header. */
+
+.header-actions { flex-wrap: wrap; gap: 12px; }
+.share-button svg { width: 16px; height: 16px; }
+.share-button:hover svg { transform: translateY(-2px); }
+.share-manual {
+  flex: 1 1 100%;
+  min-width: 0;
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .5);
+  border-radius: 0;
+  font-size: 13px;
+}
+@media (prefers-reduced-motion: reduce) { .share-button:hover svg { transform: none; } }

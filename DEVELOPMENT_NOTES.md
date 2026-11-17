@@ -324,3 +324,12 @@ Time required (browser + server), stored `HH:mm`, shown as `3:00 PM` in all list
 - Returning `challenge: ""` for READY rows on every read keeps the dashboard right even if a coordinator edits the Sheet by hand.
 - The Sheet-header check had to become two-state (`current` / `legacy`); any new column in future needs the same treatment (see `headerState_`).
 - The mock's `getLastRow` is based on non-empty cells, but number-format calls pad rows with empty cells; compare only the rows you seeded when snapshotting.
+
+## Step 7 — Final integration review
+
+No new features. Two defects fixed (details and evidence in `docs/STEP7_FINAL_INTEGRATION.md`):
+
+- `js/dashboard.js` + `js/app.js`: a department that `config.js` lists but the backend refuses on first load (not ACTIVE in the `Departments` tab) now shows "This department is not available." with no tracker, no buttons and no polling.
+- `apps-script/Code.gs` `resolveDepartment_`: with a missing or empty `Departments` tab the built-in default department (`medicine`) still resolves, so the original tracker cannot be locked out by a deleted tab. A tab with rows is always obeyed.
+
+New: `tests/step7-integration.js` (114 checks). All six suites (437 checks) pass in simulation. `Code.gs` changed, so it must be redeployed as a **New version**. Docs: `SECURITY.md` §6 and `DEPLOYMENT.md` §8 added; README file list and test command corrected.

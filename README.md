@@ -4,8 +4,8 @@ Tracks planned clinical presentations (target: **28**) and consultant availabili
 presentation coordination. Plain HTML, CSS and vanilla JavaScript — no frameworks, no build step, no paid libraries.
 Data lives in a Google Sheet, reached through a Google Apps Script web app.
 
-**Status: code complete and tested in simulation (Steps 5–7: planned presentation time, public editing, server-side readiness). NOT yet deployed.** Nothing has been verified against
-real Google or GitHub servers — follow `DEPLOYMENT.md`, then complete its live test table. Until `API_URL` is set in
+**Status: code complete (multi-department, Control Center, link sharing) and tested in simulation only. Final integration review done; see `docs/STEP7_FINAL_INTEGRATION.md`.** Nothing has been verified against
+real Google or GitHub servers — follow `DEPLOYMENT.md`, then complete the live checklist. Until `API_URL` is set in
 `js/config.js` the dashboard shows a "not connected" message and no sample data.
 
 ## Public access — read this
@@ -24,6 +24,10 @@ There is **no login, no account, no password and no role-based restriction**, by
 
 | File | Read it for |
 |---|---|
+| `docs/STEP7_FINAL_INTEGRATION.md` | **Final integration review**: what was checked, what was fixed, what is still manual, live test checklist |
+| `docs/STEP6_SHARE_LINK.md` | The Share Link button on the Control Center and every tracker page |
+| `docs/STEP5_CONTROL_CENTER.md` | The Control Center (`control.html`): department directory and Create Department; what still needs configuring |
+| `docs/MULTI_DEPARTMENT_PLAN.md` | Inspection findings and step-by-step plan for extending this tracker to several departments (planning only; no code changed) |
 | `DEPLOYMENT.md` | Step-by-step deployment (Apps Script, spreadsheet, URL, GitHub Pages), live test table, troubleshooting, checklist |
 | `SECURITY.md` | What is public, what is protected, residual risks. **Read before sharing the link** — student names are visible, and records can be edited, by anyone with the address |
 | `TEST_REPORT.md` | What was tested, what was fixed, what could **not** be tested |
@@ -41,18 +45,25 @@ python3 -m http.server 8000
 ## Structure
 
 ```
-index.html        page markup (dashboard + registration modal), CSP
+index.html        the ONE reusable tracker page (every department opens this page)
+control.html      the Control Center (department directory, Create Department)
+404.html          GitHub Pages fallback: turns /surgery into /?d=surgery and /control into /control.html
 css/style.css     all styling (approved design, responsive)
-js/config.js      the one place to set API_URL (Apps Script /exec URL)
+js/config.js      API_URL (Apps Script /exec URL), default department, department names
+js/department.js  decides which department a page is for (address, then backend directory)
 js/dashboard.js   data layer, state, rendering, search/filter
 js/form.js        registration / edit modal, validation, submission
-js/app.js         hamburger menu, navigation, startup
-apps-script/Code.gs   Google Apps Script backend (paste into the Sheet's Apps Script editor)
-tests/            automated tests (not needed to run the site): backend, security, browser
+js/app.js         menu hooks, department identity, startup
+js/control.js     Control Center logic
+js/share.js       Share Link button (tracker pages and Control Center)
+apps-script/Code.gs   the ONE Google Apps Script backend (paste into the Sheet's Apps Script editor)
+tests/            automated tests (not needed to run the site): step2 … step7
 ```
 
 ## Run the tests
 
 ```
-cd tests && npm install && npx playwright install chromium && npm test
+npm install playwright && npx playwright install chromium     # once, in this folder
+for t in step2-simulation step3-simulation step4-browser step5-control-center step6-share step7-integration; do node tests/$t.js; done
 ```
+These run the real `Code.gs` against an in-memory imitation of Google Sheets and the real pages in Chromium. They are **not** tests against real Google Sheets, Apps Script or GitHub Pages.

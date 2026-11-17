@@ -190,6 +190,16 @@ To see what the backend did: Apps Script editor → **Executions**. To see what 
 
 ---
 
+## 8. Multi-department deployment (Control Center and department pages)
+
+Everything below is **not yet verified against real Google or GitHub**; the in-code tests are listed in `docs/STEP7_FINAL_INTEGRATION.md`.
+
+1. **Redeploy the backend.** Paste the current `apps-script/Code.gs`, Save, run `runSelfTest`, then **Deploy → Manage deployments → ✏️ → New version**. Saving alone does not update the live web app. Keep *Execute as: Me* and *Who has access: Anyone*; the `/exec` URL stays the same and stays in `js/config.js`.
+2. **Migrate once.** Run `migrateToMultiDepartment` from the editor (it makes a backup copy of the spreadsheet first), then `verifyDepartmentData`. Expected: `Rows with empty Department ID: 0`, `Duplicate Submission IDs: 0`, every existing row counted under `medicine`.
+3. **Create the departments.** Open `…/control.html` and use *Create Department* for **Surgery** and **Pediatrics** (their IDs `surgery` and `pediatrics` already match `js/config.js`). `obgyn` is in `config.js` but creating "Obstetrics and Gynaecology" gives the ID `obstetrics-and-gynaecology`; to keep the existing `obgyn` address, type one row in the `Departments` tab instead: `obgyn | Obstetrics and Gynaecology | obgyn | ACTIVE`. Until a department has an ACTIVE row its page says "This department is not available."
+4. **Publish all files** to GitHub Pages, including `control.html`, `404.html`, `js/department.js`, `js/share.js` and `js/control.js`. The clean addresses `…/surgery` and `…/control` rely on GitHub Pages serving `404.html`; `…/?d=surgery` works on any host. If you edit the script inside `404.html`, recompute its CSP hash (`docs/STEP4_DEPARTMENT_PAGES.md`).
+5. Work through the live checklist in `docs/STEP7_FINAL_INTEGRATION.md` on a computer **and** a phone.
+
 ## Deployment checklist
 
 - [ ] Spreadsheet created, **not shared**, time zone set

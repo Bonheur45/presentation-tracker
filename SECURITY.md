@@ -71,3 +71,21 @@ The website has no login. That is a design decision (students just open a link),
 4. Check the Sheet once a day during registration week; delete junk rows.
 5. Download a backup of the Sheet at the end of registration.
 6. If you outgrow this design (private data, many users), add sign-in before storing anything sensitive.
+
+## 6. Multi-department: what a Department ID does and does not protect
+
+The tracker serves several departments from one backend and one Sheet. **A Department ID (the slug in a department's address) is a label, not a password.** Nothing in this design authenticates anybody.
+
+| Question | Honest answer |
+|---|---|
+| Can someone who only has the Surgery link read Pediatrics? | **Yes, if they guess or learn its ID.** The backend URL is public (`js/config.js`) and `?action=departments` lists every ACTIVE department's ID and name to anyone. `?action=list&departmentId=<id>` then returns that department's records. Separation keeps each page tidy and stops *accidental* mixing; it is not access control |
+| Can they register or edit in another department? | Yes, by naming its ID. The check "a record can only be edited from its own department" (`NOT_FOUND` otherwise) prevents mistakes and cross-department overwrites by the website; a person who sends the right ID is not stopped |
+| Can anyone create a department? | **Yes.** The Control Center is public. Limits: name validation, unique ID, reserved names, 10 creations per 10 minutes, at most 100 departments. Junk departments are removed by setting them `INACTIVE` (or deleting the row) in the `Departments` tab |
+| What does INACTIVE do? | The backend refuses list/submit/edit for it and it disappears from the Control Center. Its rows stay in the Sheet. This is an administrator switch, not a privacy feature |
+| Rate limits | Submissions and edits are limited **per department** (40 per 10 minutes each), not across the whole system as §4 describes for a single department. Many departments therefore allow more total traffic |
+| What does the Control Center expose? | Department names only, never presentation records |
+| What is *not* a protection | Hidden or unguessable-looking slugs; the clean `…/surgery` address; `noindex`; the 404 redirect; the front-end filtering by department |
+
+**Sharing a link grants access.** The Share Link button simply passes a public address on. Anyone who receives a department's link can view, register and edit in that department, exactly as §1 describes; anyone who receives the Control Center link can see the department list and create departments.
+
+If departments need to be private from one another (for example, different institutions), this architecture is the wrong one: it needs sign-in with per-department permissions on the server, which was not part of the approved design.

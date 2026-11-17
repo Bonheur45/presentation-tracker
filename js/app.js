@@ -44,10 +44,70 @@ document.addEventListener("keydown", event => {
   closeMenu();
 });
 
-document.addEventListener("DOMContentLoaded", () => {
+const PAGE_TITLE = "Medical Students Presentation Tracker";
+const PAGE_TAGLINE = document.querySelector(".header-tagline").textContent;   // restored after a department lookup
+
+// Shows which department this page belongs to (department.js). For medicine this is the original
+// "Internal Medicine, CHUK" heading.
+function applyDepartmentIdentity() {
+  const d = window.DEPARTMENT;
+  const label = d.org ? `${d.name}, ${d.org}` : d.name;
+  document.querySelector(".header-org").textContent = label;
+  document.title = `${PAGE_TITLE} · ${label}`;
+}
+
+// The department cannot be shown: say so and load nothing (no data request, no registration form).
+// `title` is the heading line, `text` the sentence under it.
+function showDepartmentMessage(title, text) {
+  document.querySelector(".header-org").textContent = title;
+  document.querySelector(".header-tagline").textContent = text;
+  document.title = `${PAGE_TITLE} · ${title}`;
+  [".live", ".header-actions", ".content"].forEach(sel => {
+    const el = document.querySelector(sel);
+    if (el) el.classList.add("hidden");   // existing utility class: display none
+  });
+}
+
+function showDepartmentNotFound() {
+  showDepartmentMessage("Department not found",
+    "There is no tracker at this address. Please check the link you were given.");
+}
+
+// The department is known to this page but the backend refuses it (not ACTIVE in the sheet): keep the same wording
+// as before, but show it instead of an empty tracker.
+function showDepartmentUnavailable() {
+  const d = window.DEPARTMENT;
+  showDepartmentMessage(d.org ? `${d.name}, ${d.org}` : d.name,
+    "This department is not available. Please contact the coordinator.");
+}
+
+function startDashboard() {
+  applyDepartmentIdentity();
   initDashboard();
   initForm();
   showLoadingState();
   refreshPresentations();
   startAutoRefresh();
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  if (window.DEPARTMENT) { startDashboard(); return; }
+  if (!window.DEPARTMENT_NEEDS_LOOKUP) { showDepartmentNotFound(); return; }
+
+  // A department created in the Control Center: find it in the backend's department directory first.
+  showDepartmentMessage("Loading department…", "");
+  try {
+    await window.lookupDepartment();
+  } catch (err) {
+    showDepartmentMessage("Department could not be loaded",
+      "Could not reach the server. Please check your internet connection and reload this page.");
+    return;
+  }
+  if (!window.DEPARTMENT) { showDepartmentNotFound(); return; }
+  document.querySelector(".header-tagline").textContent = PAGE_TAGLINE;
+  [".live", ".header-actions", ".content"].forEach(sel => {
+    const el = document.querySelector(sel);
+    if (el) el.classList.remove("hidden");
+  });
+  startDashboard();
 });

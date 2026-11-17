@@ -31,6 +31,13 @@
         </svg>
       </button>
 
+      <button class="register-button share-button" id="share-link" type="button">
+        <span>Share Link</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M10 13V3M6.5 6.5 10 3l3.5 3.5M4 10v6h12v-6" />
+        </svg>
+      </button>
+
       <!-- Retained as hidden compatibility hooks for the existing app.js. -->
       <div class="legacy-menu-hooks" hidden aria-hidden="true">
         <button id="menu-button" type="button" tabindex="-1"></button>
@@ -196,10 +203,12 @@
   </div>
 </div>
 
-<!-- Order matters: config → dashboard (data + rendering) → form → app (menu + startup) -->
+<!-- Order matters: config → department → dashboard (data + rendering) → form → app (menu + startup) -->
 <script src="js/config.js"></script>
+<script src="js/department.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/form.js"></script>
 <script src="js/app.js"></script>
+<script src="js/share.js"></script>
 </body>
 </html>

@@ -3,7 +3,8 @@
  * Loaded after config.js. All backend communication lives in the DATA LAYER section.
  */
 
-const TARGET = APP_CONFIG.TARGET; // presentation target, used for the progress label and bar
+// Presentation target, used for the progress label and bar (the department's own, else the default).
+const TARGET = window.DEPARTMENT ? window.DEPARTMENT.target : APP_CONFIG.TARGET;
 
 // Availability values stored in the data → display label + indicator colour
 const AVAILABILITY = {
@@ -38,6 +39,12 @@ const API_URL_PATTERN = /^https:\/\/script\.google\.com\/(?:a\/macros\/[^/]+|mac
 
 function apiConfigured() {
   return API_URL_PATTERN.test(String(APP_CONFIG.API_URL || "").trim());
+}
+
+// The department this page belongs to (department.js). Every list, submit and update names it.
+function requireDepartment() {
+  if (!window.DEPARTMENT) throw new ApiError("UNKNOWN_DEPARTMENT", "Department not found.");
+  return window.DEPARTMENT.id;
 }
 
 function requireApi() {
@@ -79,7 +86,10 @@ async function requestJson(url, options, timeoutMs) {
   if (json.ok !== true) {
     const e = json.error || {};
     throw new ApiError(e.code || "SERVER_ERROR",
-      e.message || "The server could not complete the request.", e.fields);
+      e.code === "UNKNOWN_DEPARTMENT"
+        ? "This department is not available. Please contact the coordinator."
+        : (e.message || "The server could not complete the request."),
+      e.fields);
   }
   return json;
 }
@@ -87,6 +97,7 @@ async function requestJson(url, options, timeoutMs) {
 function normalisePresentation(p) {
   return {
     id: String(p.id ?? ""),
+    departmentId: String(p.departmentId ?? "") || APP_CONFIG.DEFAULT_DEPARTMENT,   // blank = default, as in the Sheet
     date: String(p.date ?? ""),
     time: /^\d{2}:\d{2}$/.test(String(p.time ?? "")) ? String(p.time) : "",   // "HH:mm" or "" (older record)
     topic: String(p.topic ?? ""),
@@ -104,12 +115,14 @@ function normalisePresentation(p) {
 // Resolves with the array of presentations stored in the Google Sheet.
 async function fetchPresentations() {
   const base = requireApi();
-  const url = `${base}?action=list&t=${Date.now()}`;     // t= defeats any cached copy
+  const department = requireDepartment();
+  const url = `${base}?action=list&departmentId=${encodeURIComponent(department)}&t=${Date.now()}`;   // t= defeats any cached copy
   const json = await requestJson(url, { method: "GET" }, APP_CONFIG.READ_TIMEOUT_MS);
   if (!Array.isArray(json.presentations)) {
     throw new ApiError("BAD_RESPONSE", "The server sent an unexpected reply. Please try again later.");
   }
-  return json.presentations.map(normalisePresentation);
+  // Belt and braces: the backend already returns one department only; anything else is dropped here too.
+  return json.presentations.map(normalisePresentation).filter(p => p.departmentId === department);
 }
 
 // A save (new registration OR edit) keeps ONE requestId until it succeeds, so a retry of the same data
@@ -131,15 +144,17 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 // "status": the server decides that.
 async function sendMutation(action, payload, onStatus) {
   const base = requireApi();
+  const department = requireDepartment();
   if (submitInFlight) {
     throw new ApiError("IN_PROGRESS", "A submission is already in progress. Please wait.");
   }
 
-  const fingerprint = JSON.stringify({ action, ...payload });
+  const fingerprint = JSON.stringify({ action, ...payload, departmentId: department });
   if (!pendingSubmission || pendingSubmission.fingerprint !== fingerprint) {
     pendingSubmission = { fingerprint, requestId: newRequestId() };
   }
-  const body = JSON.stringify({ action, requestId: pendingSubmission.requestId, ...payload });
+  // departmentId comes last: nothing in the form data can override the page's department.
+  const body = JSON.stringify({ action, requestId: pendingSubmission.requestId, ...payload, departmentId: department });
 
   submitInFlight = true;
   try {
@@ -406,10 +421,12 @@ function showLoadError(message) {
 
 let refreshSeq = 0;          // only the newest response may update the screen
 let refreshPromise = null;
+let departmentUnavailable = false;   // the backend refuses this department (inactive / not in the sheet): stop asking
 
 // Reloads the data from Google Sheets and redraws. Resolves true on success, false on failure
 // (it never throws). `force` starts a new read even if one is already running.
 function refreshPresentations({ force = false } = {}) {
+  if (departmentUnavailable) return Promise.resolve(false);
   if (refreshPromise && !force) return refreshPromise;
   const seq = ++refreshSeq;
   if (hasLoaded) setSyncStatus("Updating…", "");
@@ -432,6 +449,14 @@ function refreshPresentations({ force = false } = {}) {
     } catch (error) {
       console.error("Could not load presentations:", error);
       if (seq !== refreshSeq) return false;
+      if (error.code === "UNKNOWN_DEPARTMENT" && !hasLoaded && typeof showDepartmentUnavailable === "function") {
+        // Listed in config.js but not ACTIVE in the sheet's Departments tab: show that plainly (no empty tracker,
+        // no registration form that cannot succeed) and stop polling. app.js draws the message.
+        departmentUnavailable = true;
+        clearInterval(autoRefreshTimer);
+        showDepartmentUnavailable();
+        return false;
+      }
       if (hasLoaded) {
         // keep showing the last good data, clearly marked as possibly out of date
         setSyncStatus(
@@ -458,6 +483,7 @@ function refreshPresentations({ force = false } = {}) {
 // Also used for edits: a record that is already on screen is replaced, never duplicated.
 function upsertSavedPresentation(record) {
   if (!record || !hasLoaded) return;
+  if (record.departmentId !== window.DEPARTMENT.id) return;   // never mix another department's record into this page
   presentations = presentations.some(p => p.id === record.id)
     ? presentations.map(p => (p.id === record.id ? record : p))
     : [...presentations, record];
