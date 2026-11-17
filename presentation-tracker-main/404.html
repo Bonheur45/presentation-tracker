@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jfzJXUOUCQRBJNLzfj1+2Hi8qwsN9viL+siyHWIBV/g='; base-uri 'none'; form-action 'none'">
+<title>Medical Students Presentation Tracker</title>
+</head>
+<body>
+<!--
+  GitHub Pages fallback (served for any address that has no file, such as /surgery).
+  It sends /<repository>/surgery to /<repository>/?d=surgery; index.html then shows the clean address again.
+  The script below is allowed by the hash in the Content-Security-Policy: if you edit it, the hash must be
+  recomputed (see docs/STEP4_DEPARTMENT_PAGES.md).
+-->
+<p id="msg">Opening the presentation tracker…</p>
+<noscript><p>JavaScript is required. Open the tracker with <code>?d=</code> followed by the department, for example <code>?d=medicine</code>.</p></noscript>
+<script>(function () {
+  var known = ["medicine", "pediatrics", "surgery", "obgyn", "control"];
+  var loc = window.location;
+  var parts = loc.pathname.split("/").filter(Boolean);
+  // GitHub Pages project sites live under /<repository>/ (keep that part); user sites and custom domains do not.
+  var keep = /\.github\.io$/i.test(loc.hostname) && !(parts.length === 1 && known.indexOf(parts[0].toLowerCase()) !== -1) ? 1 : 0;
+  var slug = parts[keep];
+  if (!slug) { document.getElementById("msg").textContent = "Page not found."; return; }   // nothing to redirect to: stop (no loop)
+  var base = "/" + parts.slice(0, keep).map(encodeURIComponent).join("/") + (keep ? "/" : "");
+  if (slug.toLowerCase() === "control") { loc.replace(base + "control.html"); return; }   // the Control Center (control.html)
+  loc.replace(base + "?d=" + encodeURIComponent(slug.toLowerCase()));
+})();
+</script>
+</body>
+</html>

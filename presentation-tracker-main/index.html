@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#173c32">
+<meta name="robots" content="noindex, nofollow">
+<!-- Content Security Policy: scripts and styles only from this site; the page may talk only to Google Apps Script. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://script.google.com https://*.googleusercontent.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23173c32'/%3E%3Cpath d='M14 7h4v7h7v4h-7v7h-4v-7H7v-4h7z' fill='%23fff'/%3E%3C/svg%3E">
+<title>Medical Students Presentation Tracker · Internal Medicine, CHUK</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<main class="container">
+
+<header class="header">
+  <div class="header-main">
+    <div class="header-title">
+      <h1>Medical Students Presentation Tracker</h1>
+      <p class="header-org">Internal Medicine, CHUK</p>
+      <p class="header-tagline">Track planned presentations and consultant availability.</p>
+      <div class="live"><span class="live-dot" aria-hidden="true"></span><span class="live-label">LIVE TRACKING</span></div>
+    </div>
+    <div class="header-actions">
+      <button class="register-button" id="register-menu" type="button">
+        <span>Register a Presentation</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M4 10h11M10 5l5 5-5 5" />
+        </svg>
+      </button>
+
+      <button class="register-button share-button" id="share-link" type="button">
+        <span>Share Link</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M10 13V3M6.5 6.5 10 3l3.5 3.5M4 10v6h12v-6" />
+        </svg>
+      </button>
+
+      <a class="register-button control-link" id="control-center" href="control.html">
+        <span>Control Center</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M4 10h11M10 5l5 5-5 5" />
+        </svg>
+      </a>
+
+      <!-- Retained as hidden compatibility hooks for the existing app.js. -->
+      <div class="legacy-menu-hooks" hidden aria-hidden="true">
+        <button id="menu-button" type="button" tabindex="-1"></button>
+        <nav id="menu-dropdown">
+          <button id="dashboard-menu" type="button" tabindex="-1">Presentation Dashboard</button>
+        </nav>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="content">
+
+  <section class="stats">
+    <div class="stat">
+      <div class="stat-number" id="total">0</div>
+      <div class="stat-label">Total presentations</div>
+    </div>
+    <div class="stat ready">
+      <div class="stat-number" id="ready">0</div>
+      <div class="stat-label">Ready</div>
+    </div>
+    <div class="stat unready">
+      <div class="stat-number" id="unready">0</div>
+      <div class="stat-label">Unready</div>
+    </div>
+  </section>
+
+  <section class="progress-section">
+    <div class="progress-top">
+      <strong>Presentation progress</strong>
+      <span id="progress-label">0 completed of 0 entered</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progress"></div></div>
+  </section>
+
+  <section class="section" id="overview-section" tabindex="-1">
+    <h2 class="section-title">Presentation Overview</h2>
+    <div class="dashboard-tools">
+      <input id="search" type="search" placeholder="Search topic or any name…"
+        aria-label="Search by topic, student, supervisor or consultant">
+      <div class="tool-select">
+        <label for="filter">Sort by</label>
+        <select id="filter">
+          <option value="all">All Presentations</option>
+          <option value="pending">Pending Presentations</option>
+          <option value="completed">Completed Presentations</option>
+          <option value="ready">Ready</option>
+          <option value="unready">Unready</option>
+        </select>
+      </div>
+      <button class="refresh" id="refresh" type="button">↻ Refresh</button>
+    </div>
+    <p class="sync-status" id="sync-status" role="status" aria-live="polite"></p>
+    <div class="export-bar">
+      <div class="export-download" role="group" aria-labelledby="export-label">
+        <span class="export-label" id="export-label">Download list</span>
+        <div class="export-buttons">
+          <button class="refresh export-btn" id="export-pdf" type="button">PDF</button>
+          <button class="refresh export-btn" id="export-xlsx" type="button">Excel</button>
+        </div>
+      </div>
+    </div>
+    <div id="overview"><div class="empty">Loading presentations…</div></div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title">Ready Presentations
+      <span class="ready-tag" id="ready-count">0 confirmed</span>
+    </h2>
+    <div id="ready-list"><div class="empty">No confirmed presentations yet.</div></div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title">Unready Presentations
+      <span class="unready-tag" id="unready-count">0 requiring attention</span>
+    </h2>
+    <div id="unready-list"><div class="empty">No outstanding challenges.</div></div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title">Completed Presentations
+      <span class="completed-tag" id="completed-count">0 completed</span>
+    </h2>
+    <div id="completed-list"><div class="empty">No completed presentations yet.</div></div>
+  </section>
+
+</div>
+
+<footer class="footer">Built by Bonheur Mwizerwa, Founder of <a href="https://www.boldpeakshub.com" target="_blank" rel="noopener noreferrer">BoldPeaks Hub</a></footer>
+
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- REGISTRATION / EDIT MODAL (one form, two modes: register a new presentation, edit an existing one) -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+
+    <div class="modal-header">
+      <div>
+        <h2 id="modal-title">Register a Presentation</h2>
+        <p id="modal-subtitle">Enter your planned presentation details below.</p>
+      </div>
+      <button class="close-button" id="close-modal" type="button"
+        aria-label="Close form">×</button>
+    </div>
+
+    <form id="presentation-form" novalidate>
+      <div class="form-grid">
+
+        <div class="field">
+          <label for="date">Planned presentation date</label>
+          <input type="date" id="date" min="2000-01-01" max="2100-12-31" required>
+          <p class="field-error" id="date-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field">
+          <label for="time">Planned presentation time</label>
+          <input type="time" id="time" required>
+          <p class="field-error" id="time-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field full">
+          <label for="topic">Presentation topic</label>
+          <input type="text" id="topic" placeholder="Enter presentation topic"
+            autocomplete="off" required>
+          <p class="field-error" id="topic-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field">
+          <label for="student">Medical student presenter</label>
+          <input type="text" id="student" placeholder="Full name"
+            autocomplete="name" required>
+          <p class="field-error" id="student-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field">
+          <label for="supervisor">Supervisor</label>
+          <input type="text" id="supervisor" placeholder="Supervisor's name"
+            autocomplete="off" required>
+          <p class="field-error" id="supervisor-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field full">
+          <label for="consultant">Consultant</label>
+          <input type="text" id="consultant" placeholder="Consultant's name"
+            autocomplete="off" required>
+          <p class="field-error" id="consultant-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field full">
+          <label for="availability">Has the consultant confirmed availability?</label>
+          <select id="availability" required>
+            <option value="">Select confirmation status</option>
+            <option value="Confirmed">Confirmed available</option>
+            <option value="Pending">Not yet confirmed</option>
+            <option value="Unavailable">Unavailable</option>
+          </select>
+          <p class="field-error" id="availability-error" aria-live="polite"></p>
+        </div>
+
+        <div class="field full hidden" id="challenge-field">
+          <label for="challenge">Challenge / reason</label>
+          <textarea id="challenge" placeholder="Explain why this presentation is not ready..."></textarea>
+          <p class="field-error" id="challenge-error" aria-live="polite"></p>
+        </div>
+
+      </div>
+
+      <button class="submit-btn" id="submit-btn" type="submit">SUBMIT PRESENTATION</button>
+      <div class="message" id="message" role="status" aria-live="polite"></div>
+    </form>
+
+  </div>
+</div>
+
+<!-- Order matters: config → department → dashboard (data + rendering) → export (PDF / Excel) → form → app (menu + startup) -->
+<script src="js/config.js"></script>
+<script src="js/department.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/export.js"></script>
+<script src="js/form.js"></script>
+<script src="js/app.js"></script>
+<script src="js/share.js"></script>
+</body>
+</html>
