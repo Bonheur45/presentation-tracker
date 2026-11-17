@@ -91,6 +91,10 @@ function showDepartmentUnavailable() {
 
 function startDashboard() {
   applyDepartmentIdentity();
+  // A name changed in the Control Center shows here without any change to config.js.
+  if (typeof window.syncDepartmentName === "function") {
+    window.syncDepartmentName().then(changed => { if (changed) applyDepartmentIdentity(); });
+  }
   initDashboard();
   initForm();
   showLoadingState();

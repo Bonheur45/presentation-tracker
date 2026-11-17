@@ -51,32 +51,53 @@ function unzipStored(buf) {
     page.on("pageerror", e => errors.push(String(e)));
     await page.route("https://script.google.com/**", route => route.fulfill({ status: 200, contentType: "application/json", headers: { "Access-Control-Allow-Origin": "*" }, body: JSON.stringify({ ok: true, departments: [], presentations: DATA }) }));
     await page.goto(origin + "/index.html");
-    await page.waitForFunction(() => /\(5\)/.test(document.querySelector("#export-category option").textContent), null, { timeout: 8000 });
+    await page.waitForFunction(() => document.querySelectorAll("#overview .presentation").length === 5, null, { timeout: 8000 });
 
-    console.log("\n== menu and counts ==");
-    const labels = await page.locator("#export-category option").allInnerTexts();
-    ok("the menu lists the five categories with their counts", JSON.stringify(labels) === JSON.stringify(["All presentations (5)", "Pending presentations (3)", "Ready presentations (2)", "Unready presentations (1)", "Completed presentations (2)"]), JSON.stringify(labels));
+    const labels = ["All presentations", "Pending presentations", "Ready presentations", "Unready presentations", "Completed presentations"];
+    console.log("\n== one category menu ==");
+    ok("the separate download category menu is gone", (await page.locator("#export-category").count()) === 0);
+    ok("only one select in the overview tools: Sort by", (await page.locator("#overview-section select").count()) === 1);
+
+    console.log("\n== layout and labels ==");
+    ok("the overview selector is labelled 'Sort by'", (await page.locator('label[for="filter"]').innerText()) === "Sort by");
+    const yOf = async (sel) => (await page.locator(sel).boundingBox()).y;
+    ok("on a laptop the search box has its own line above Sort by",
+       (await page.locator("#search").boundingBox()).y + (await page.locator("#search").boundingBox()).height <= (await yOf("#filter")));
+    ok("the Download list label sits directly above the PDF and Excel buttons, below Sort by",
+       (await yOf("#filter")) < (await yOf("#export-label")) && (await yOf("#export-label")) < (await yOf("#export-pdf")) && Math.abs((await yOf("#export-pdf")) - (await yOf("#export-xlsx"))) < 2);
+    ok("completed cards show the consultant too", (await page.locator("#completed-list .presentation").first().innerText()).includes("Consultant: Dr. Con"));
+    ok("progress counts completed among entered presentations (no fixed target)", (await page.locator("#progress-label").innerText()) === "2 completed of 5 entered");
 
     const get = async (cat, btn) => {
-      await page.selectOption("#export-category", cat);
+      await page.selectOption("#filter", cat);
       const [dl] = await Promise.all([page.waitForEvent("download"), page.click(btn)]);
       return { name: dl.suggestedFilename(), buf: fs.readFileSync(await dl.path()) };
     };
     const expected = { all: 5, pending: 3, ready: 2, unready: 1, completed: 2 };
+    const sheetCount = { all: 3, pending: 2, ready: 1, unready: 1, completed: 1 };      // Ready, Unready, Completed: only the non-empty ones
+    const allSheets = (z) => Object.keys(z).filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort().map(n => z[n]).join("");
 
     console.log("\n== Excel ==");
     for (const cat of Object.keys(expected)) {
       const f = await get(cat, "#export-xlsx");
       const files = unzipStored(f.buf);
-      const sheet = files["xl/worksheets/sheet1.xml"] || "";
+      const sheetNames = Object.keys(files).filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort();
+      const sheet = sheetNames.map(n => files[n]).join("");
       ok(cat + ": file name is medicine-" + cat + "-presentations-YYYY-MM-DD.xlsx", new RegExp("^medicine-" + cat + "-presentations-\\d{4}-\\d{2}-\\d{2}\\.xlsx$").test(f.name), f.name);
       ok(cat + ": a valid package with the five parts", ["[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl/styles.xml", "xl/worksheets/sheet1.xml"].every(n => files[n]));
-      ok(cat + ": header row + " + expected[cat] + " data rows", (sheet.match(/<row /g) || []).length === expected[cat] + 1, String((sheet.match(/<row /g) || []).length));
+      ok(cat + ": one sheet per status (" + sheetCount[cat] + ")", sheetNames.length === sheetCount[cat] && (files["xl/workbook.xml"].match(/<sheet /g) || []).length === sheetCount[cat], String(sheetNames.length));
+      ok(cat + ": a header row on every sheet + " + expected[cat] + " data rows", (sheet.match(/<row /g) || []).length === expected[cat] + sheetCount[cat], String((sheet.match(/<row /g) || []).length));
     }
-    const all = unzipStored((await get("all", "#export-xlsx")).buf)["xl/worksheets/sheet1.xml"];
+    const allZip = unzipStored((await get("all", "#export-xlsx")).buf);
+    const all = allSheets(allZip);
+    ok("the sheets are named by status, in order Ready, Unready, Completed", /<sheet name="Ready presentations"[^>]*\/><sheet name="Unready presentations"[^>]*\/><sheet name="Completed presentations"/.test(allZip["xl/workbook.xml"]), allZip["xl/workbook.xml"].slice(-300));
+    ok("each status sheet holds only its own status", allZip["xl/worksheets/sheet1.xml"].includes("Topic 1<") && allZip["xl/worksheets/sheet1.xml"].includes("Topic 2") && !allZip["xl/worksheets/sheet1.xml"].includes("Topic 3<") &&
+       allZip["xl/worksheets/sheet2.xml"].includes("Topic 3") && allZip["xl/worksheets/sheet3.xml"].includes("Topic 4") && allZip["xl/worksheets/sheet3.xml"].includes("Topic 5"));
+    ok("numbering restarts on each sheet", /<c r="A2" s="2"><v>1<\/v><\/c>/.test(allZip["xl/worksheets/sheet3.xml"]));
+    ok("no filter drop-down arrows on the Excel headers", !/autoFilter/.test(all));
     ok("text is escaped (a formula-like or HTML-like topic stays inert text)", all.includes("=1+1 &amp; &lt;b&gt;bold&lt;/b&gt; Émile") && all.includes("Zoë &quot;Z&quot; O'Neil"));
     ok("dates are real Excel dates (2026-12-12 = 46368)", /<c r="D3" s="3"><v>46368<\/v><\/c>/.test(all), all.slice(all.indexOf('r="D3"'), all.indexOf('r="D3"') + 60));
-    ok("rows are listed by planned date", all.indexOf("Topic 1") < all.indexOf("Topic 3") && all.indexOf("Topic 3") < all.indexOf("Topic 5"));
+    ok("rows are grouped by status, then listed by planned date", all.indexOf("Topic 1") < all.indexOf("Topic 2") && all.indexOf("Topic 2") < all.indexOf("Topic 3") && all.indexOf("Topic 3") < all.indexOf("Topic 4") && all.indexOf("Topic 4") < all.indexOf("Topic 5"));
     const unready = unzipStored((await get("unready", "#export-xlsx")).buf)["xl/worksheets/sheet1.xml"];
     ok("unready: carries the challenge text", unready.includes("Waiting for the consultant."));
     const completed = unzipStored((await get("completed", "#export-xlsx")).buf)["xl/worksheets/sheet1.xml"];
@@ -85,7 +106,7 @@ function unzipStored(buf) {
     console.log("\n== PDF ==");
     // headless Chromium stops handing over downloads after about ten in one page; a reload starts a fresh count (test-only limit)
     await page.reload();
-    await page.waitForFunction(() => /\(5\)/.test(document.querySelector("#export-category option").textContent), null, { timeout: 8000 });
+    await page.waitForFunction(() => document.querySelectorAll("#overview .presentation").length === 5, null, { timeout: 8000 });
     for (const cat of Object.keys(expected)) {
       const f = await get(cat, "#export-pdf");
       const s = f.buf.toString("latin1");
@@ -96,6 +117,8 @@ function unzipStored(buf) {
     }
     const pdf = (await get("all", "#export-pdf")).buf.toString("latin1");
     ok("accented letters are written in the PDF's single-byte encoding (É = byte 0xC9, ë = 0xEB)", pdf.includes("\xC9mile") && pdf.includes('(Zo\xEB "Z" O\'Neil)'));
+    ok("the PDF has a heading for each status with its count", pdf.includes("(Ready presentations \\(2\\)) Tj") && pdf.includes("(Unready presentations \\(1\\)) Tj") && pdf.includes("(Completed presentations \\(2\\)) Tj") &&
+       pdf.indexOf("Ready presentations \\(2") < pdf.indexOf("Unready presentations \\(1") && pdf.indexOf("Unready presentations \\(1") < pdf.indexOf("Completed presentations \\(2"));
     ok("parentheses in text would be escaped (the text is written inside a PDF string)", pdf.includes("(=1+1 &"));
 
     console.log("\n== empty category and errors ==");
@@ -106,8 +129,8 @@ function unzipStored(buf) {
     const page2 = await ctx.newPage();
     await page2.route("https://script.google.com/**", route => route.fulfill({ status: 200, contentType: "application/json", headers: { "Access-Control-Allow-Origin": "*" }, body: JSON.stringify({ ok: true, departments: [], presentations: [rec(1, "READY", "PENDING", "Confirmed")] }) }));
     await page2.goto(origin + "/index.html");
-    await page2.waitForFunction(() => /\(1\)/.test(document.querySelector("#export-category option").textContent), null, { timeout: 8000 });
-    await page2.selectOption("#export-category", "completed");
+    await page2.waitForFunction(() => document.querySelectorAll("#overview .presentation").length === 1, null, { timeout: 8000 });
+    await page2.selectOption("#filter", "completed");
     let downloaded = false; page2.on("download", () => { downloaded = true; });
     await page2.click("#export-pdf");
     await page2.waitForSelector(".toast.show");

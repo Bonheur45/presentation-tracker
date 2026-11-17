@@ -3,9 +3,6 @@
  * Loaded after config.js. All backend communication lives in the DATA LAYER section.
  */
 
-// Presentation target, used for the progress label and bar (the department's own, else the default).
-const TARGET = window.DEPARTMENT ? window.DEPARTMENT.target : APP_CONFIG.TARGET;
-
 // Availability values stored in the data → display label + indicator colour
 const AVAILABILITY = {
   Confirmed:   { label: "Confirmed available", tone: "ready" },
@@ -301,7 +298,7 @@ function completionButton(p, target) {
           aria-label="${done ? "Mark as done" : "Return to pending"}: ${escapeHTML(p.topic)}">${text}</button>`;
 }
 
-// Completed presentations: topic, student presenter, planned date and supervisor.
+// Completed presentations: topic, student presenter, planned date, supervisor and consultant.
 function completedCard(p, index) {
   return `
     <article class="presentation presentation-completed">
@@ -310,6 +307,7 @@ function completedCard(p, index) {
         <span>Presenter: ${escapeHTML(p.student)}</span>
         <span>Date: ${escapeHTML(formatDate(p.date))}</span>
         <span>Supervisor: ${escapeHTML(p.supervisor)}</span>
+        <span>Consultant: ${escapeHTML(p.consultant)}</span>
         <span class="status status-ready"><i class="dot"></i>Completed</span>
       </div>
       <div class="presentation-actions">
@@ -337,10 +335,10 @@ function renderDashboard() {
   setText("ready-count", `${ready.length} confirmed`);
   setText("unready-count", `${unready.length} requiring attention`);
   setText("completed-count", `${completed.length} completed`);
-  setText("progress-label", `${presentations.length} / ${TARGET}`);
-
-  // Bar is capped visually at 100%; registrations are never blocked past TARGET.
-  byId("progress").style.width = `${Math.min(presentations.length / TARGET * 100, 100)}%`;
+  // Progress = completed presentations among those entered so far. There is no fixed target number.
+  const entered = presentations.length;
+  setText("progress-label", `${completed.length} completed of ${entered} entered`);
+  byId("progress").style.width = entered ? `${completed.length / entered * 100}%` : "0%";
 
   byId("ready-list").innerHTML = ready.length
     ? ready.map((p, i) => presentationCard(p, i)).join("")
@@ -354,7 +352,6 @@ function renderDashboard() {
     ? completed.map((p, i) => completedCard(p, i)).join("")
     : '<div class="empty">No completed presentations yet.</div>';
 
-  if (typeof window.updateExportCounts === "function") window.updateExportCounts();   // export.js: counts in the Download list menu
   renderOverview();
 }
 
@@ -409,7 +406,7 @@ function showLoadingState() {
   setText("ready-count", "loading");
   setText("unready-count", "loading");
   setText("completed-count", "loading");
-  setText("progress-label", `– / ${TARGET}`);
+  setText("progress-label", "Loading…");
   byId("progress").style.width = "0%";
   const loading = '<div class="empty">Loading presentations…</div>';
   ["ready-list", "unready-list", "completed-list", "overview"].forEach(id => { byId(id).innerHTML = loading; });

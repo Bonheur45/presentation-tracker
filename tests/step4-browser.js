@@ -98,7 +98,7 @@ async function suite(browser, label, origin, inRepo) {
   let txt = await bodyText(page);
   ok(label + ": medicine page shows its 5 presentations and nothing else", (await page.locator("#total").innerText()) === "5" && MED_TOPICS.every(t => txt.includes(t)) &&
      !/Appendicitis|Hernia|Neonatal/.test(txt));
-  ok(label + ": progress label uses the target (n / 28)", (await page.locator("#progress-label").innerText()) === "5 / 28");
+  ok(label + ": progress label counts completed among entered (no fixed target)", (await page.locator("#progress-label").innerText()) === "1 completed of 5 entered");
   ok(label + ": no script errors", errors.length === 0, errors.join(" | "));
   await page.close();
 
@@ -116,7 +116,7 @@ async function suite(browser, label, origin, inRepo) {
     txt = await bodyText(page);
     ok(label + ": /" + slug + " shows only its own " + count + " presentation(s)", (await page.locator("#total").innerText()) === count && topics.every(t => txt.includes(t)) && !others.test(txt));
     ok(label + ": /" + slug + " asked the backend for departmentId=" + slug + " only",
-       requests.slice(before).filter(r => r.method === "GET").every(r => r.params.departmentId === slug) && requests.slice(before).length > 0);
+       requests.slice(before).filter(r => r.method === "GET" && r.params.action !== "departments").every(r => r.params.departmentId === slug) && requests.slice(before).length > 0);   // (the name directory, names only, is also read)
     ok(label + ": /" + slug + " no script errors", errors.length === 0, errors.join(" | "));
     await page.close();
   }

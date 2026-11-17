@@ -246,8 +246,8 @@ async function register(page, topic, student, avail, challenge) {
     await settle(page);
     ok("Surgery: both registrations saved under 'surgery' (the page sent no other department)",
        requests.filter(r => r.method === "POST" && r.body.action === "submit").every(r => r.body.departmentId === "surgery") && getC({ action: "list", departmentId: "surgery" }).presentations.length === 2);
-    ok("Surgery dashboard: total 2, ready 1, unready 1, progress '2 / 28', only its own topics",
-       (await num(page, "total")) === "2" && (await num(page, "ready")) === "1" && (await num(page, "unready")) === "1" && (await num(page, "progress-label")) === "2 / 28" &&
+    ok("Surgery dashboard: total 2, ready 1, unready 1, progress '0 completed of 2 entered', only its own topics",
+       (await num(page, "total")) === "2" && (await num(page, "ready")) === "1" && (await num(page, "unready")) === "1" && (await num(page, "progress-label")) === "0 completed of 2 entered" &&
        !/Heart failure|Neonatal/.test(await body(page)));
     ok("Unready section shows the reason entered", /Waiting for the consultant/.test(await page.locator("#unready-list").innerText()));
 

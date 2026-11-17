@@ -9,7 +9,8 @@
  *   ready      pending and ready          (the "Ready Presentations" section)
  *   unready    pending and unready        (the "Unready Presentations" section)
  *   completed  completed                  (the "Completed Presentations" section)
- * Rows are listed by planned date, then time.
+ * Rows are grouped by status (Ready, Unready, Completed: the page's own order), then listed by planned date and time.
+ * PDF: one headed section per status. Excel: one sheet per status.
  *
  * Uses from dashboard.js: presentations, hasLoaded, isReady, isCompleted, formatDate, formatPlannedTime,
  * AVAILABILITY, showToast. Uses window.DEPARTMENT (department.js) for the title and the file name.
@@ -25,7 +26,7 @@
     completed: { label: "Completed presentations", file: "completed", pick: list => list.filter(isCompleted) }
   };
 
-  const selectEl = document.getElementById("export-category");
+  const selectEl = document.getElementById("filter");          // the overview's "Sort by" menu: the list that is shown is the list that is downloaded
   const pdfBtn = document.getElementById("export-pdf");
   const xlsxBtn = document.getElementById("export-xlsx");
   if (!selectEl || !pdfBtn || !xlsxBtn) return;
@@ -62,6 +63,18 @@
         challenge: done ? "" : String(p.challenge || "")
       };
     });
+  }
+
+  // The rows of a category split by status, in the page's order. Numbering restarts in each group.
+  function groupsFor(category) {
+    const rows = rowsFor(category);
+    return [["Ready", "Ready presentations"], ["Unready", "Unready presentations"], ["Completed", "Completed presentations"]]
+      .map(d => {
+        const list = rows.filter(r => r.status === d[0]);
+        list.forEach((r, i) => { r.no = i + 1; });
+        return { status: d[0], label: d[1], rows: list };
+      })
+      .filter(g => g.rows.length);
   }
 
   function fileName(category, ext) {
@@ -137,13 +150,17 @@
     return m ? Math.round((Date.UTC(+m[1], +m[2] - 1, +m[3]) - Date.UTC(1899, 11, 30)) / 86400000) : null;
   };
 
-  function buildXlsx(category, rows) {
+  function buildXlsx(category, groups) {
     const columns = [
       { head: "No.", w: 6 }, { head: "Topic", w: 44 }, { head: "Presenter", w: 24 }, { head: "Date", w: 14 }, { head: "Time", w: 11 },
       { head: "Supervisor", w: 24 }, { head: "Consultant", w: 24 }, { head: "Consultant availability", w: 22 },
       { head: "Readiness", w: 12 }, { head: "Progress", w: 12 }, { head: "Challenge", w: 46 }
     ];
     const text = (ref, s, style) => `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(s)}</t></is></c>`;
+    const MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    const head = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+    const sheetXml = (rows) => {
     let sheet = "";
     sheet += `<row r="1" ht="30" customHeight="1">${columns.map((c, i) => text(colName(i) + "1", c.head, 1)).join("")}</row>`;
     rows.forEach((r, k) => {
@@ -156,23 +173,26 @@
         text("H" + n, r.availability, 2) + text("I" + n, r.readiness, 2) + text("J" + n, r.progress, 2) + text("K" + n, r.challenge, 2) +
         `</row>`;
     });
-    const last = colName(columns.length - 1) + (rows.length + 1);
-    const MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-    const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    const head = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
-    const sheetName = CATEGORIES[category].label.replace(/[\[\]:*?\/\\]/g, "").slice(0, 31);
+    return head + `<worksheet xmlns="${MAIN}">` +
+        '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
+        `<cols>${columns.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${c.w}" customWidth="1"/>`).join("")}</cols>` +
+        `<sheetData>${sheet}</sheetData></worksheet>`;
+    };
+    const sheetNames = groups.map(g => g.label.replace(/[\[\]:*?\/\\]/g, "").slice(0, 31));
+    const count = groups.length;
 
     return zip([
       { name: "[Content_Types].xml", text: head + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' +
         '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
-        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+        groups.map((g, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("") +
         '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
       { name: "_rels/.rels", text: head + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
         `<Relationship Id="rId1" Type="${REL}/officeDocument" Target="xl/workbook.xml"/></Relationships>` },
-      { name: "xl/workbook.xml", text: head + `<workbook xmlns="${MAIN}" xmlns:r="${REL}"><sheets><sheet name="${xmlEsc(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>` },
+      { name: "xl/workbook.xml", text: head + `<workbook xmlns="${MAIN}" xmlns:r="${REL}"><sheets>${sheetNames.map((nm, i) => `<sheet name="${xmlEsc(nm)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets></workbook>` },
       { name: "xl/_rels/workbook.xml.rels", text: head + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        `<Relationship Id="rId1" Type="${REL}/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="${REL}/styles" Target="styles.xml"/></Relationships>` },
+        groups.map((g, i) => `<Relationship Id="rId${i + 1}" Type="${REL}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("") +
+        `<Relationship Id="rId${count + 1}" Type="${REL}/styles" Target="styles.xml"/></Relationships>` },
       { name: "xl/styles.xml", text: head + `<styleSheet xmlns="${MAIN}">` +
         '<numFmts count="1"><numFmt numFmtId="164" formatCode="dd\\ mmm\\ yyyy"/></numFmts>' +
         '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>' +
@@ -185,11 +205,7 @@
         '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>' +
         '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="left" vertical="top"/></xf></cellXfs>' +
         '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>' },
-      { name: "xl/worksheets/sheet1.xml", text: head + `<worksheet xmlns="${MAIN}">` +
-        '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
-        `<cols>${columns.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${c.w}" customWidth="1"/>`).join("")}</cols>` +
-        `<sheetData>${sheet}</sheetData><autoFilter ref="A1:${last}"/></worksheet>` }
-    ]);
+    ].concat(groups.map((g, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, text: sheetXml(g.rows) }))));
   }
 
   /* ---------------- PDF ---------------- */
@@ -251,7 +267,8 @@
   const num = n => String(Math.round(n * 100) / 100);
   const pdfEsc = s => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 
-  function buildPdf(category, rows) {
+  function buildPdf(category, groups) {
+    const total = groups.reduce((n, g) => n + g.rows.length, 0);
     const columns = [
       { head: "No.", w: 24 }, { head: "Topic", w: 200 }, { head: "Presenter", w: 100 }, { head: "Date and time", w: 82 },
       { head: "Supervisor", w: 100 }, { head: "Consultant", w: 100 }, { head: "Availability", w: 88 }, { head: "Status", w: 76 }
@@ -259,7 +276,7 @@
     const title = "Medical Students Presentation Tracker";
     const subtitle = `${departmentTitle()}: ${CATEGORIES[category].label}`;
     const stamp = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-    const meta = `${rows.length} ${rows.length === 1 ? "presentation" : "presentations"}, listed by planned date. Generated ${stamp}.`;
+    const meta = `${total} ${total === 1 ? "presentation" : "presentations"}, grouped by status and listed by planned date. Generated ${stamp}.`;
 
     const pages = [];
     let ops = null, y = 0;
@@ -289,7 +306,15 @@
     }
     newPage();
 
-    rows.forEach(r => {
+    const BAND = [0.91, 0.95, 0.93], BAND_H = 18;
+    function groupBand(g) {
+      if (y + BAND_H + 44 > PH - 44) newPage();            // never leave a heading alone at the bottom of a page
+      rect(MARGIN, y, PW - 2 * MARGIN, BAND_H, BAND);
+      text(MARGIN + PADX, y + 12.5, winAnsi(`${g.label} (${g.rows.length})`), "F3", 9, STATUS_COLOR[g.status] || INK);
+      y += BAND_H;
+    }
+
+    groups.forEach(g => { groupBand(g); g.rows.forEach(r => {
       // each cell is a list of { lines, font, color } blocks
       const cells = [
         [{ t: String(r.no), f: "F1", c: INK }],
@@ -315,9 +340,9 @@
       });
       y += height;
       rule(MARGIN, PW - MARGIN, y, [0.86, 0.89, 0.87]);
-    });
+    }); });
 
-    if (!rows.length) { text(MARGIN + PADX, y + 16, "No presentations in this category.", "F2", 9, MUTED); }
+    if (!total) { text(MARGIN + PADX, y + 16, "No presentations in this category.", "F2", 9, MUTED); }
 
     // footer on every page, now that the page count is known
     pages.forEach((p, i) => {
@@ -351,22 +376,14 @@
 
   /* ---------------- the controls ---------------- */
 
-  // Called by dashboard.js after every render: shows how many presentations each category holds.
-  window.updateExportCounts = function () {
-    Array.from(selectEl.options).forEach(o => {
-      const c = CATEGORIES[o.value];
-      if (c) o.textContent = `${c.label} (${c.pick(presentations).length})`;
-    });
-  };
-
   function run(kind) {
     if (!hasLoaded) { showToast("The list is still loading. Try again in a moment.", "error"); return; }
     const category = CATEGORIES[selectEl.value] ? selectEl.value : "all";
-    const rows = rowsFor(category);
-    if (!rows.length) { showToast(`There are no ${CATEGORIES[category].label.toLowerCase()} to download yet.`, "error"); return; }
+    const groups = groupsFor(category);
+    if (!groups.length) { showToast(`There are no ${CATEGORIES[category].label.toLowerCase()} to download yet.`, "error"); return; }
     try {
-      if (kind === "pdf") { saveBlob(buildPdf(category, rows), fileName(category, "pdf")); showToast("PDF downloaded."); }
-      else { saveBlob(buildXlsx(category, rows), fileName(category, "xlsx")); showToast("Excel file downloaded."); }
+      if (kind === "pdf") { saveBlob(buildPdf(category, groups), fileName(category, "pdf")); showToast("PDF downloaded."); }
+      else { saveBlob(buildXlsx(category, groups), fileName(category, "xlsx")); showToast("Excel file downloaded."); }
     } catch (err) {
       showToast("Could not create the file. Please try again.", "error");
     }
@@ -374,5 +391,4 @@
 
   pdfBtn.addEventListener("click", () => run("pdf"));
   xlsxBtn.addEventListener("click", () => run("xlsx"));
-  if (typeof hasLoaded !== "undefined" && hasLoaded) window.updateExportCounts();
 })();

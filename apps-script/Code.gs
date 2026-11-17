@@ -189,6 +189,10 @@ function doPost(e) {
       const result = handleCreateDepartment_(body);
       payload = { ok: true, replayed: result.replayed, department: result.department,
                   message: "Department created successfully." };
+    } else if (action === "renamedepartment") {
+      const result = handleRenameDepartment_(body);
+      payload = { ok: true, unchanged: result.unchanged, department: result.department,
+                  message: result.unchanged ? "No changes were needed." : "Department name updated successfully." };
     } else {
       throw new ApiError("UNKNOWN_ACTION", "Unknown action.");
     }
@@ -1037,6 +1041,50 @@ function handleCreateDepartment_(body) {
     const department = { id: v.slug, name: v.name, slug: v.slug };
     if (requestId) cache.put("dept_req_" + requestId, JSON.stringify(department), CONFIG.REQUEST_ID_TTL_SEC);
     return { department: department, replayed: false };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Renames a department: only the "Department Name" cell (column B) of its row changes. The Department ID and the
+// address (slug) are permanent, because every presentation row and every shared link refers to them, so nothing
+// else moves. The new name is checked like a new department's name and must not belong to ANOTHER department
+// (active or inactive). Renaming to the same text is a harmless no-op. Safe to repeat, so it needs no requestId.
+function handleRenameDepartment_(body) {
+  const id = String(body.departmentId == null ? "" : body.departmentId).trim().toLowerCase();
+  if (!DEPT_ID_PATTERN.test(id) || id.length > 40) throw new ApiError("UNKNOWN_DEPARTMENT", "Unknown department.");
+  const v = validateDepartmentName_(body.name);
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(CONFIG.LOCK_WAIT_MS);
+  } catch (err) {
+    throw new ApiError("BUSY", "The service is busy. Please try again in a moment.");
+  }
+
+  try {
+    const ss = getSpreadsheet_();
+    getSheet_();
+    const sh = setUpDepartmentsSheet_(ss);
+    const rows = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), DEPT_HEADERS.length).getValues();
+    let target = -1;
+    const others = [];
+    rows.forEach((r, i) => {
+      const rid = String(r[0]).trim().toLowerCase();
+      if (rid === "") return;
+      if (rid === id && target === -1) target = i; else others.push({ id: rid, name: String(r[1]).trim(), slug: String(r[2]).trim().toLowerCase() });
+    });
+    if (target === -1 || String(rows[target][3]).trim().toUpperCase() === DEPT_INACTIVE) throw new ApiError("UNKNOWN_DEPARTMENT", "Unknown department.");
+
+    const clash = others.filter(d => d.id === v.slug || d.slug === v.slug || slugFromName_(d.name) === v.slug)[0];
+    if (clash) {
+      throw new ApiError("DUPLICATE", "A department with this name already exists (" + (clash.name || clash.id) + ").", { name: "A department with this name already exists." });
+    }
+
+    const department = { id: id, name: v.name, slug: id };
+    if (String(rows[target][1]).trim() === v.name) return { department: department, unchanged: true };
+    sh.getRange(target + 2, 2).setNumberFormat("@").setValue(v.name);      // plain text, never a formula
+    return { department: department, unchanged: false };
   } finally {
     lock.releaseLock();
   }

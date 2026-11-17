@@ -3,7 +3,8 @@
  *
  * It does two things, both through the SAME Apps Script backend the trackers use:
  *   1. lists the active departments (GET ?action=departments: names only, never presentation records);
- *   2. creates a department (POST action=createDepartment): one new row in the existing Departments tab.
+ *   2. creates a department (POST action=createDepartment): one new row in the existing Departments tab;
+ *   3. renames a department (POST action=renameDepartment): only its name changes, never its ID or address.
  * Each department opens the ONE reusable tracker (index.html) at  ./?d=<slug>. Nothing is copied per department.
  */
 (function () {
@@ -81,7 +82,16 @@
       a.href = "./?d=" + encodeURIComponent(d.slug);             // the one reusable tracker, opened for this department
       a.textContent = "Open tracker →";
       a.setAttribute("aria-label", "Open the " + d.name + " tracker");
-      li.append(name, a);
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "edit-btn dept-edit";
+      edit.textContent = "Edit name";
+      edit.setAttribute("aria-label", "Edit the name of " + d.name);
+      edit.addEventListener("click", () => openModal(d));
+      const actions = document.createElement("div");
+      actions.className = "dept-actions";
+      actions.append(edit, a);
+      li.append(name, actions);
       listEl.appendChild(li);
     });
     emptyEl.classList.toggle("hidden", departments.length > 0);
@@ -124,19 +134,29 @@
   function setNameError(text) { nameErr.textContent = text; nameEl.classList.toggle("invalid", !!text); }
 
   function updateHint() {
+    if (editing) { hintEl.textContent = "The address stays the same: " + editing.id + ". Only the name changes."; return; }
     const slug = slugFromName(nameEl.value);
     hintEl.textContent = slug ? "Department ID and address: " + slug : "";
   }
 
   let closeTimer = null, saving = false, pending = null;       // pending = { name, requestId } kept until the save succeeds
   let opener = null;
+  let editing = null;                                          // the department being renamed, or null while creating one
 
-  function openModal() {
+  // openModal()  → Create Department;   openModal(department) → Edit name for that department.
+  function openModal(dept) {
     clearTimeout(closeTimer);
     opener = document.activeElement;
-    form.reset(); setNameError(""); setMessage("", ""); updateHint(); pending = null;
+    editing = dept && dept.id ? dept : null;
+    form.reset(); setNameError(""); setMessage("", ""); pending = null;
+    byId("dept-title").textContent = editing ? "Edit Department Name" : "Create Department";
+    byId("dept-intro").textContent = editing ? "Everyone who uses this tracker will see the new name." : "The new tracker uses the same database and starts empty.";
+    submitBtn.textContent = editing ? "SAVE NAME" : "CREATE DEPARTMENT";
+    if (editing) nameEl.value = editing.name;
+    updateHint();
     overlay.classList.add("open"); document.body.classList.add("modal-open");
     nameEl.focus();
+    if (editing) nameEl.select();
   }
 
   function closeModal() {
@@ -177,6 +197,44 @@
     }
   }
 
+  async function renameDepartment(dept, name) {
+    const send = () => requestJson(apiUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "renameDepartment", departmentId: dept.id, name })
+    }, APP_CONFIG.SUBMIT_TIMEOUT_MS);
+    try {
+      return await send();
+    } catch (err) {
+      if (err.code !== "NETWORK" && err.code !== "TIMEOUT") throw err;
+      await new Promise(r => setTimeout(r, APP_CONFIG.SUBMIT_RETRY_DELAY_MS));
+      return await send();                                       // renaming to the same text twice changes nothing, so the retry is safe
+    }
+  }
+
+  async function onRename(name) {
+    const dept = editing;
+    saving = true; submitBtn.disabled = true; setMessage("Saving name…", "info");
+    try {
+      const json = await renameDepartment(dept, name);
+      const d = json.department || {};
+      if (d.id !== dept.id) throw new ApiError("BAD_RESPONSE", "The server sent an unexpected reply. Please try again later.");
+      const mine = departments.filter(x => x.id === d.id)[0];
+      if (mine) mine.name = String(d.name || name);
+      render();
+      setMessage(json.unchanged ? "The name was already “" + name + "”." : "The department is now called “" + (d.name || name) + "”.", "success");
+      closeTimer = setTimeout(closeModal, 1200);
+      loadDepartments();
+    } catch (err) {
+      if (err.fields && err.fields.name) { setNameError(err.fields.name); setMessage("", ""); nameEl.focus(); }
+      else if (err.code === "NETWORK" || err.code === "TIMEOUT") {
+        setMessage("Could not confirm that the name was saved. Check the directory, or press Save again (it is safe).", "error");
+      } else setMessage(err.message, "error");
+    } finally {
+      saving = false; submitBtn.disabled = false;
+    }
+  }
+
   async function onSubmit(event) {
     event.preventDefault();
     if (saving) return;
@@ -184,6 +242,7 @@
     const problem = checkName(name);
     setNameError(problem); setMessage("", "");
     if (problem) { nameEl.focus(); return; }
+    if (editing) { onRename(name); return; }
 
     saving = true; submitBtn.disabled = true; setMessage("Creating department…", "info");
     try {
@@ -208,7 +267,7 @@
 
   /* ---------------- wiring ---------------- */
 
-  openBtn.addEventListener("click", openModal);
+  openBtn.addEventListener("click", () => openModal());
   byId("dept-close").addEventListener("click", closeModal);
   overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(); });
   form.addEventListener("submit", onSubmit);

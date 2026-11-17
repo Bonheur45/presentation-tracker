@@ -1,6 +1,6 @@
 # Clinical Presentation Tracker
 
-Tracks planned clinical presentations (target: **28**) and consultant availability for medical student
+Tracks planned clinical presentations (the progress bar counts completed presentations among those entered; there is no fixed target) and consultant availability for medical student
 presentation coordination. Plain HTML, CSS and vanilla JavaScript — no frameworks, no build step, no paid libraries.
 Data lives in a Google Sheet, reached through a Google Apps Script web app.
 

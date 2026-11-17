@@ -250,8 +250,8 @@ async function suite(browser, label, origin, inRepo) {
     const txt = await bodyText(page);
     ok("its URL opens the new tracker: right name, clean address", (await heading(page)) === "Radiology & Imaging" && (await page.title()).endsWith("Radiology & Imaging") && new URL(page.url()).pathname === "/presentation-tracker/radiology-and-imaging", page.url());
     ok("it shows the normal tracker layout and tagline", await page.locator(".header-actions").isVisible() && /Track planned presentations/.test(await page.locator(".header-tagline").innerText()) && await page.locator("#register-menu").isVisible());
-    ok("it is empty: 0 total, 0 / 28, no presentations from anywhere else",
-       (await page.locator("#total").innerText()) === "0" && (await page.locator("#progress-label").innerText()) === "0 / 28" && !/Appendicitis|Hernia|Neonatal|Heart failure|Diabetic/.test(txt));
+    ok("it is empty: 0 total, 0 completed of 0 entered, no presentations from anywhere else",
+       (await page.locator("#total").innerText()) === "0" && (await page.locator("#progress-label").innerText()) === "0 completed of 0 entered" && !/Appendicitis|Hernia|Neonatal|Heart failure|Diabetic/.test(txt));
     ok("it requested presentations for its own department only", requests.slice(before).filter(r => r.method === "GET" && r.params.action === "list").length > 0 &&
        requests.slice(before).filter(r => r.method === "GET" && r.params.action === "list").every(r => r.params.departmentId === "radiology-and-imaging"));
     ok("no script errors", errors.length === 0, errors.join(" | "));

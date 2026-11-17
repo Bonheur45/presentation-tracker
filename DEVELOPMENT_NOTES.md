@@ -13,7 +13,7 @@
 clinical-presentation-tracker/
 ├── index.html
 ├── css/style.css
-├── js/config.js      (loaded 1st) APP_CONFIG: API_URL, TARGET, refresh/timeouts
+├── js/config.js      (loaded 1st) APP_CONFIG: API_URL, refresh/timeouts
 ├── js/dashboard.js   (loaded 2nd) data layer (API), state, rendering, auto-refresh
 ├── js/form.js        (loaded 3rd) modal + validation + submit
 ├── js/app.js         (loaded 4th) menu, navigation, Escape key, startup
@@ -26,7 +26,7 @@ Frontend scripts are classic (non-module) and share globals, so load order in `i
 ## Completed frontend features (Step 1)
 - Approved design preserved (green #173c32 header, white content area, neutral page background).
 - Hamburger menu: *Register a Presentation* opens the modal; *Presentation Dashboard* scrolls to the overview.
-- Stats Total / Ready / Unready; target bar `n / 28` (capped at 100%, registrations never blocked past 28).
+- Stats Total / Ready / Unready; progress bar = completed among entered (`n completed of m entered`; no fixed target).
 - Ready and Unready numbered sections; unready cards show availability status and challenge.
 - Overview: search (topic or student), filter (All / Ready / Unready), Refresh.
 - Registration modal: inline validation, success/error messages, close button, click-outside, Escape, focus trap, scroll lock. Challenge field only for "Not yet confirmed" / "Unavailable" and then mandatory.
@@ -84,7 +84,7 @@ Text columns are formatted as plain text so entries like `=1+1` are stored as te
 - Script must be **created from the spreadsheet** (Extensions → Apps Script). For a standalone script, set `CONFIG.SPREADSHEET_ID`.
 - Set the spreadsheet time zone (File → Settings) — it decides how planned dates are interpreted.
 - Tunables in `CONFIG`: sheet name, length limits, rate limit, lock wait.
-- The 28-presentation target lives only in the frontend (`TARGET` in `dashboard.js`); the backend does not cap submissions.
+- There is no presentation target any more (the old `TARGET: 28` was removed); the backend does not cap submissions.
 
 ## Deployment instructions (owner must do these — nothing has been deployed)
 1. **Create the spreadsheet** at sheets.google.com (e.g. "Clinical Presentation Tracker Database"). Do not share it publicly.
@@ -333,3 +333,14 @@ No new features. Two defects fixed (details and evidence in `docs/STEP7_FINAL_IN
 - `apps-script/Code.gs` `resolveDepartment_`: with a missing or empty `Departments` tab the built-in default department (`medicine`) still resolves, so the original tracker cannot be locked out by a deleted tab. A tab with rows is always obeyed.
 
 New: `tests/step7-integration.js` (114 checks). All six suites (437 checks) pass in simulation. `Code.gs` changed, so it must be redeployed as a **New version**. Docs: `SECURITY.md` §6 and `DEPLOYMENT.md` §8 added; README file list and test command corrected.
+
+
+---
+
+# LATEST CHANGES (layout, labels, progress)
+
+- **Layout:** one column on every screen; the page is 720 px wide on laptops. Each card's two buttons (Mark as Done / Return to Pending and Edit Presentation) sit in one row at the bottom of the card.
+- **Download list:** the category menu is first, then the label `Download list` directly above the PDF and Excel buttons. Files are grouped by status (Ready, Unready, Completed): PDF with a headed section per status, Excel with one sheet per status.
+- **Overview selector** has the label `Sort by` above it.
+- **Consultant** is shown on every card, including completed ones.
+- **Progress:** the fixed target of 28 was removed (`TARGET` is gone from `config.js`, `department.js`, `dashboard.js`). The label reads `N completed of M entered` and the bar is completed / entered. Old tests that expected `n / 28` were updated.

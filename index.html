@@ -75,8 +75,8 @@
 
   <section class="progress-section">
     <div class="progress-top">
-      <strong>Presentation target</strong>
-      <span id="progress-label">0 / 28</span>
+      <strong>Presentation progress</strong>
+      <span id="progress-label">0 completed of 0 entered</span>
     </div>
     <div class="progress-track"><div class="progress-fill" id="progress"></div></div>
   </section>
@@ -86,27 +86,27 @@
     <div class="dashboard-tools">
       <input id="search" type="search" placeholder="Search topic or any name…"
         aria-label="Search by topic, student, supervisor or consultant">
-      <select id="filter" aria-label="Filter presentations">
-        <option value="all">All Presentations</option>
-        <option value="pending">Pending Presentations</option>
-        <option value="completed">Completed Presentations</option>
-        <option value="ready">Ready</option>
-        <option value="unready">Unready</option>
-      </select>
+      <div class="tool-select">
+        <label for="filter">Sort by</label>
+        <select id="filter">
+          <option value="all">All Presentations</option>
+          <option value="pending">Pending Presentations</option>
+          <option value="completed">Completed Presentations</option>
+          <option value="ready">Ready</option>
+          <option value="unready">Unready</option>
+        </select>
+      </div>
       <button class="refresh" id="refresh" type="button">↻ Refresh</button>
     </div>
     <p class="sync-status" id="sync-status" role="status" aria-live="polite"></p>
     <div class="export-bar">
-      <label for="export-category">Download list</label>
-      <select id="export-category" aria-label="Category to download">
-        <option value="all">All presentations</option>
-        <option value="pending">Pending presentations</option>
-        <option value="ready">Ready presentations</option>
-        <option value="unready">Unready presentations</option>
-        <option value="completed">Completed presentations</option>
-      </select>
-      <button class="refresh export-btn" id="export-pdf" type="button">PDF</button>
-      <button class="refresh export-btn" id="export-xlsx" type="button">Excel</button>
+      <div class="export-download" role="group" aria-labelledby="export-label">
+        <span class="export-label" id="export-label">Download list</span>
+        <div class="export-buttons">
+          <button class="refresh export-btn" id="export-pdf" type="button">PDF</button>
+          <button class="refresh export-btn" id="export-xlsx" type="button">Excel</button>
+        </div>
+      </div>
     </div>
     <div id="overview"><div class="empty">Loading presentations…</div></div>
   </section>

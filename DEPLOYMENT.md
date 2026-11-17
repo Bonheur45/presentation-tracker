@@ -127,7 +127,7 @@ Do this on the **real GitHub Pages address**, once on a computer and once on a *
 
 | # | Do this | Expect |
 |---|---|---|
-| 1 | Open the site in a private window | Page loads; stats show `0`, `0 / 28`; status line "Updated hh:mm:ss · refreshes every 30 seconds"; header badge `● LIVE TRACKING` |
+| 1 | Open the site in a private window | Page loads; stats show `0`, `0 completed of 0 entered`; status line "Updated hh:mm:ss · refreshes every 30 seconds"; header badge `● LIVE TRACKING` |
 | 2 | ☰ → *Register a Presentation* | Modal opens |
 | 3 | Submit with every field empty | Red messages on each field; nothing is sent |
 | 4 | Choose *Not yet confirmed*, leave the reason empty, submit | Rejected: "Please explain the challenge or reason." |
@@ -149,7 +149,7 @@ Do this on the **real GitHub Pages address**, once on a computer and once on a *
 | 14g | Open the site on a second device, edit there; look at the first | Change appears within ~30 s / after ↻ Refresh |
 | 14h | Open the site in a private window with no sign-in anywhere | *Edit Presentation* works (public editing is intended) |
 | 14i | (If you had data before this version) After deploying the new version, open the dashboard | Old records are all there with "Time not set"; column K header was added; editing an old record requires choosing a time |
-| 14 | **Delete all test rows in the Sheet** (select rows → right-click → *Delete rows*) | Dashboard returns to `0 / 28` |
+| 14 | **Delete all test rows in the Sheet** (select rows → right-click → *Delete rows*) | Dashboard returns to `0 completed of 0 entered` |
 
 If step 5 fails with "Could not reach the server", go to the troubleshooting table below — it is almost always the **Who has access: Anyone** setting or a `/dev` URL.
 
@@ -213,6 +213,6 @@ Everything below is **not yet verified against real Google or GitHub**; the in-c
 - [ ] Repository created (public), `index.html` at top level, uploaded, **no spreadsheet ID in any file**
 - [ ] *Settings → Pages* → main / root; live address opens
 - [ ] Live test table (part 5) completed on a computer **and** a phone on mobile data
-- [ ] All test rows deleted; dashboard shows `0 / 28`
+- [ ] All test rows deleted; dashboard shows `0 completed of 0 entered`
 - [ ] Read `SECURITY.md`; decided who may receive the link; confirmed names may be shown under your institution's data-protection policy
 - [ ] Coordinator knows: edit in the Sheet, redeploy as a *new version* after code changes

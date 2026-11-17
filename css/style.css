@@ -336,8 +336,10 @@ button { cursor: pointer; touch-action: manipulation; }
 
 /* OVERVIEW */
 
-.dashboard-tools { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
-.dashboard-tools input { flex: 1; min-width: 180px; }
+.dashboard-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-bottom: 20px; }
+.tool-select { display: flex; flex-direction: column; gap: 6px; }
+.tool-select label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.dashboard-tools input { flex: 1 1 100%; min-width: 0; }   /* search always on its own line; Sort by + Refresh sit below it */
 .dashboard-tools select, .dashboard-tools button { width: auto; padding: 10px 13px; }
 
 .refresh { border: 1px solid var(--border); background: white; border-radius: 8px; color: var(--text); }
@@ -489,7 +491,8 @@ textarea { min-height: 95px; resize: vertical; }
 
   /* search on its own row; filter + refresh share the next one */
   .dashboard-tools input { flex: 1 1 100%; }
-  .dashboard-tools select { flex: 1; min-width: 0; }
+  .tool-select { flex: 1; min-width: 0; }
+  .dashboard-tools select { min-width: 0; }
   .dashboard-tools button { flex: none; }
 
   .modal-overlay { padding: 12px; }
@@ -546,12 +549,15 @@ textarea { min-height: 95px; resize: vertical; }
 .dept-name { min-width: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 
 .dept-open { display: block; flex: none; text-align: center; text-decoration: none; white-space: nowrap; padding: 9px 14px; }
+.dept-actions { display: flex; gap: 10px; }
+.dept-actions > * { flex: 1 1 0; }
+.dept-edit { cursor: pointer; }
 
 .field-hint { color: var(--muted); font-size: 12px; line-height: 1.4; }
 .field-hint:empty { display: none; }
 
 @media (max-width: 650px) {
-  .dept-open { min-height: 44px; display: flex; align-items: center; justify-content: center; padding: 10px 16px; }
+  .dept-open, .dept-edit { min-height: 44px; display: flex; align-items: center; justify-content: center; padding: 10px 16px; }
 }
 
 /* SHARE LINK button (Step 6): same outlined style as .register-button, placed next to it in the header. */
@@ -576,13 +582,13 @@ a.register-button { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { .back-button:hover svg { transform: none; } }
 
 /* DOWNLOAD LIST (PDF / Excel): category menu + two buttons, between the search tools and the overview cards */
-.export-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 20px; }
-.export-bar label { font-size: 12px; font-weight: 600; color: var(--muted); margin-right: 2px; }
-.export-bar select { width: auto; min-width: 210px; padding: 10px 13px; }
+.export-bar { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin: 0 0 20px; }
+.export-download { display: flex; flex-direction: column; gap: 6px; }
+.export-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.export-buttons { display: flex; gap: 10px; }
 .export-btn { padding: 10px 18px; font-size: 13px; font-weight: 650; }
 .export-btn:hover { background: var(--green-light); }
 @media (max-width: 650px) {
-  .export-bar label { flex: 1 1 100%; margin: 0; }
-  .export-bar select { flex: 1 1 100%; min-height: 44px; }
+  .export-bar { align-items: stretch; }
   .export-btn { flex: 1 1 0; min-height: 44px; }
 }

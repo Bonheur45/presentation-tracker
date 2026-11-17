@@ -1,7 +1,7 @@
 /*
  * department.js — decides which department this page is for. Loaded right after config.js.
  *
- * Result: window.DEPARTMENT = { id, name, org, target }   or   null when the address names an unknown department.
+ * Result: window.DEPARTMENT = { id, name, org }   or   null when the address names an unknown department.
  *
  * Where the department comes from (first match wins):
  *   1. the query string:   …/?d=surgery           (always works; also what the 404.html fallback produces)
@@ -35,8 +35,7 @@
     ? Object.freeze({
         id: found.slug,
         name: known[found.slug].name,
-        org: known[found.slug].org || "",
-        target: known[found.slug].target || APP_CONFIG.TARGET
+        org: known[found.slug].org || ""
       })
     : null;
   window.DEPARTMENT_REQUESTED = found.slug;      // what the address asked for (shown when it is unknown)
@@ -54,12 +53,32 @@
     window.DEPARTMENT = Object.freeze({
       id: found.slug,
       name: String(hit.name || found.slug),
-      org: "",
-      target: APP_CONFIG.TARGET
+      org: ""
     });
     window.DEPARTMENT_NEEDS_LOOKUP = false;
+    window.DEPARTMENT_NAME_FRESH = true;                         // the name just came from the directory
     restoreCleanAddress();
     return window.DEPARTMENT;
+  };
+
+  // A department renamed in the Control Center: the name in config.js (or the page's first look) may be out of date.
+  // Asks the directory once, and resolves true when the name changed (the page then redraws its heading).
+  // Never throws: if the directory cannot be reached the page simply keeps the name it has.
+  window.syncDepartmentName = async function () {
+    const current = window.DEPARTMENT;
+    if (!current || window.DEPARTMENT_NAME_FRESH) return false;
+    window.DEPARTMENT_NAME_FRESH = true;
+    try {
+      const json = await requestJson(`${requireApi()}?action=departments&t=${Date.now()}`, { method: "GET" }, APP_CONFIG.READ_TIMEOUT_MS);
+      const list = Array.isArray(json.departments) ? json.departments : [];
+      const hit = list.filter(d => d && d.id === current.id)[0];
+      const name = hit ? String(hit.name || "").trim() : "";
+      if (!name || name === current.name) return false;
+      window.DEPARTMENT = Object.freeze({ id: current.id, name: name, org: current.org });   // the ID never changes
+      return true;
+    } catch (ignore) {
+      return false;
+    }
   };
 
   // Reached through the 404.html fallback (?d=surgery)? Show the clean address (…/surgery) in the address bar.
