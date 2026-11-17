@@ -35,7 +35,7 @@ const CONFIG = {
 };
 
 const SERVICE_NAME = "clinical-presentation-tracker";
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /* ================================ SCHEMA =================================== */
 
@@ -50,22 +50,25 @@ const HEADERS = [
   "Consultant Availability",    // H
   "Challenge / Reason",         // I
   "Readiness Status",           // J
-  "Planned Presentation Time"   // K  (added in Stage 5; stored as 24-hour text "HH:mm")
+  "Planned Presentation Time",  // K  (added in Stage 5; stored as 24-hour text "HH:mm")
+  "Completion Status"           // L  (added in Step 1 of the completion feature: "PENDING" | "COMPLETED")
 ];
 
-// Sheets created before Stage 5 have only columns A–J. They are upgraded in place (see headerState_).
+// Sheets created before Stage 5 have only columns A–J; sheets from Stage 5 have A–K. They are upgraded
+// in place (see headerState_).
 const LEGACY_COLUMNS = 10;
 
 // zero-based column indexes into a row array
 const COL = { ID: 0, TIMESTAMP: 1, DATE: 2, TOPIC: 3, STUDENT: 4, SUPERVISOR: 5,
-              CONSULTANT: 6, AVAILABILITY: 7, CHALLENGE: 8, STATUS: 9, TIME: 10 };
+              CONSULTANT: 6, AVAILABILITY: 7, CHALLENGE: 8, STATUS: 9, TIME: 10, COMPLETION: 11 };
 
 // Fields a public user may change through the "update" action (everything else is server-owned).
-const UPDATABLE_FIELDS = ["date", "time", "topic", "student", "supervisor", "consultant", "availability", "challenge"];
+const UPDATABLE_FIELDS = ["date", "time", "topic", "student", "supervisor", "consultant", "availability", "challenge",
+                          "completionStatus"];
 
 // Plain text for everything except the two date columns, so a value such as
 // "=HYPERLINK(...)" typed by a visitor is stored as text, never as a formula.
-const COLUMN_FORMATS = ["@", "yyyy-mm-dd hh:mm:ss", "yyyy-mm-dd", "@", "@", "@", "@", "@", "@", "@", "@"];
+const COLUMN_FORMATS = ["@", "yyyy-mm-dd hh:mm:ss", "yyyy-mm-dd", "@", "@", "@", "@", "@", "@", "@", "@", "@"];
 
 // Availability codes used by the frontend ↔ labels stored in the Sheet.
 const AVAILABILITY = {
@@ -76,6 +79,12 @@ const AVAILABILITY = {
 
 const STATUS_READY = "READY";
 const STATUS_UNREADY = "UNREADY";
+
+// Completion status: has the presentation actually taken place? Entirely independent of readiness
+// (READY/UNREADY) and of the planned date: a past date never turns a presentation into COMPLETED.
+const COMPLETION_PENDING = "PENDING";
+const COMPLETION_COMPLETED = "COMPLETED";
+const COMPLETION_VALUES = [COMPLETION_PENDING, COMPLETION_COMPLETED];
 
 /* ============================ ERRORS & RESPONSES =========================== */
 
@@ -186,19 +195,24 @@ function getSpreadsheet_() {
   return ss;
 }
 
-// Returns "current" (A–K as expected) or "legacy" (A–J as expected, K empty: a Step 1–4 sheet that
-// still has to be upgraded). Anything else means someone changed the headers: refuse to touch the data.
+// Returns "current" (A–L as expected) or "legacy" (A–J or A–K as expected, the newer header cells
+// empty: an older sheet that still has to be upgraded). Anything else means someone changed the
+// headers: refuse to touch the data.
 function headerState_(sheet) {
   const found = sheet.getRange(1, 1, 1, LEGACY_COLUMNS).getValues()[0];
   const mismatch = HEADERS.slice(0, LEGACY_COLUMNS).some((h, i) => String(found[i]).trim() !== h);
   if (mismatch) {
-    throw new Error("Sheet '" + CONFIG.SHEET_NAME + "' headers do not match the expected schema (row 1, columns A–K).");
+    throw new Error("Sheet '" + CONFIG.SHEET_NAME + "' headers do not match the expected schema (row 1, columns A–L).");
   }
-  const k = sheet.getMaxColumns() >= HEADERS.length
-    ? String(sheet.getRange(1, HEADERS.length, 1, 1).getValues()[0][0]).trim() : "";
-  if (k === HEADERS[COL.TIME]) return "current";
-  if (k === "") return "legacy";
-  throw new Error("Sheet '" + CONFIG.SHEET_NAME + "' column K header is unexpected.");
+  const headerAt = (col) => sheet.getMaxColumns() >= col
+    ? String(sheet.getRange(1, col, 1, 1).getValues()[0][0]).trim() : "";
+  const k = headerAt(COL.TIME + 1);
+  const l = headerAt(COL.COMPLETION + 1);
+  if (k !== "" && k !== HEADERS[COL.TIME]) throw new Error("Sheet '" + CONFIG.SHEET_NAME + "' column K header is unexpected.");
+  if (l !== "" && l !== HEADERS[COL.COMPLETION]) throw new Error("Sheet '" + CONFIG.SHEET_NAME + "' column L header is unexpected.");
+  if (k === HEADERS[COL.TIME] && l === HEADERS[COL.COMPLETION]) return "current";
+  if (k === "" && l !== "") throw new Error("Sheet '" + CONFIG.SHEET_NAME + "' has column L but no column K header.");
+  return "legacy";
 }
 
 // Returns the Presentations sheet, creating it on first use and upgrading an old 10-column sheet.
@@ -217,9 +231,13 @@ function setUpSheet_(ss) {
     if (sheet.getMaxColumns() < HEADERS.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), HEADERS.length - sheet.getMaxColumns());
     sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
   } else if (headerState_(sheet) === "legacy") {
-    // Upgrade a Step 1–4 sheet: only the new header cell is written. No data row is changed.
+    // Upgrade an older sheet: only the missing header cells (K and/or L) are written. Existing
+    // Submission IDs and data cells are not changed (column L is back-filled with PENDING below).
     if (sheet.getMaxColumns() < HEADERS.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), HEADERS.length - sheet.getMaxColumns());
-    sheet.getRange(1, HEADERS.length, 1, 1).setValues([[HEADERS[COL.TIME]]]);
+    const have = sheet.getRange(1, 1, 1, HEADERS.length).getValues()[0];
+    [COL.TIME, COL.COMPLETION].forEach(c => {
+      if (String(have[c]).trim() === "") sheet.getRange(1, c + 1, 1, 1).setValues([[HEADERS[c]]]);
+    });
   }
 
   const rows = Math.max(sheet.getMaxRows() - 1, 1);
@@ -229,7 +247,7 @@ function setUpSheet_(ss) {
 
   COLUMN_FORMATS.forEach((fmt, i) => sheet.getRange(2, i + 1, rows, 1).setNumberFormat(fmt));
 
-  [150, 160, 150, 280, 190, 170, 170, 170, 320, 120, 150].forEach((w, i) => sheet.setColumnWidth(i + 1, w));
+  [150, 160, 150, 280, 190, 170, 170, 170, 320, 120, 150, 150].forEach((w, i) => sheet.setColumnWidth(i + 1, w));
   sheet.getRange(2, COL.TOPIC + 1, rows, 1).setWrap(true);
   sheet.getRange(2, COL.CHALLENGE + 1, rows, 1).setWrap(true);
 
@@ -241,6 +259,14 @@ function setUpSheet_(ss) {
     .build();
   sheet.getRange(2, COL.AVAILABILITY + 1, rows, 1).setDataValidation(rule);
 
+  // ...and only PENDING or COMPLETED in Completion Status (blank stays allowed: it is read as PENDING).
+  const completionRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(COMPLETION_VALUES, true)
+    .setAllowInvalid(false)
+    .setHelpText("Choose: PENDING (not yet delivered) or COMPLETED (has taken place).")
+    .build();
+  sheet.getRange(2, COL.COMPLETION + 1, rows, 1).setDataValidation(completionRule);
+
   const statusRange = sheet.getRange(2, COL.STATUS + 1, rows, 1);
   sheet.setConditionalFormatRules([
     SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo(STATUS_READY)
@@ -249,7 +275,28 @@ function setUpSheet_(ss) {
       .setBackground("#fbeeee").setFontColor("#b54747").setRanges([statusRange]).build()
   ]);
   assignMissingIds_(sheet);
+  backfillCompletionStatus_(sheet);
   return sheet;
+}
+
+// Gives every existing presentation row whose Completion Status cell is empty the value PENDING.
+// Only column L of non-blank rows is written, and only where it is empty: nothing else is touched,
+// and a value that is already there (even COMPLETED) is never overwritten. Safe to run repeatedly.
+function backfillCompletionStatus_(sheet) {
+  const last = sheet.getLastRow();
+  if (last < 2) return 0;
+  const content = sheet.getRange(2, COL.ID + 1, last - 1, COL.COMPLETION + 1).getValues();
+  const col = [];
+  let fixed = 0;
+  content.forEach(r => {
+    const hasData = r.slice(0, COL.COMPLETION).some(v => v !== "" && v != null);
+    if (hasData && String(r[COL.COMPLETION]).trim() === "") { col.push([COMPLETION_PENDING]); fixed++; }
+    else col.push([r[COL.COMPLETION]]);
+  });
+  if (fixed) {
+    sheet.getRange(2, COL.COMPLETION + 1, last - 1, 1).setNumberFormat("@").setValues(col);
+  }
+  return fixed;
 }
 
 // Rows typed in by hand have no Submission ID, so they cannot be edited through the website.
@@ -374,6 +421,17 @@ function validateSubmission_(input) {
     else if (FORMULA_START.test(v[f])) errors[f] = "Please start with a letter or number (not = + - or @).";
   });
 
+  // Completion status: absent/null defaults to PENDING; anything else must be exactly PENDING or COMPLETED.
+  if (input.completionStatus == null) {
+    v.completionStatus = COMPLETION_PENDING;
+  } else if (typeof input.completionStatus !== "string" ||
+             COMPLETION_VALUES.indexOf(input.completionStatus.trim()) === -1) {
+    v.completionStatus = "";
+    errors.completionStatus = "Completion status must be PENDING or COMPLETED.";
+  } else {
+    v.completionStatus = input.completionStatus.trim();
+  }
+
   v.availability = isTextOrAbsent_(input.availability) ? availabilityCode_(input.availability) : null;
   if (!v.availability) errors.availability = "Please select the consultant's availability.";
 
@@ -452,7 +510,8 @@ function findRowById_(sheet, id) {
 }
 
 function handleSubmit_(body) {
-  const check = validateSubmission_(body);
+  // A new registration is always PENDING: any completionStatus sent with it is ignored.
+  const check = validateSubmission_(Object.assign({}, body, { completionStatus: undefined }));
   if (!check.ok) throw new ApiError("VALIDATION_ERROR", "Please correct the highlighted fields.", check.errors);
   const v = check.value;
   const requestId = normaliseRequestId_(body.requestId);
@@ -498,17 +557,17 @@ function handleSubmit_(body) {
   }
 }
 
-// One sheet row (columns A–K, in HEADERS order) from validated values.
+// One sheet row (columns A–L, in HEADERS order) from validated values.
 function rowValues_(id, createdAt, v, status, tz) {
   return [id, createdAt, Utilities.parseDate(v.date, tz, "yyyy-MM-dd"), v.topic, v.student, v.supervisor,
-          v.consultant, AVAILABILITY[v.availability].label, v.challenge, status, v.time];
+          v.consultant, AVAILABILITY[v.availability].label, v.challenge, status, v.time, v.completionStatus];
 }
 
 function presentationFrom_(id, createdAtIso, v, status) {
   return {
     id: id, date: v.date, time: v.time, topic: v.topic, student: v.student, supervisor: v.supervisor,
     consultant: v.consultant, availability: v.availability, challenge: v.challenge,
-    status: status, createdAt: createdAtIso
+    status: status, completionStatus: v.completionStatus, createdAt: createdAtIso
   };
 }
 
@@ -556,6 +615,14 @@ function handleUpdate_(body) {
     // Current stored values, overlaid with whatever the request supplied.
     const storedRow = sheet.getRange(rowNumber, 1, 1, HEADERS.length).getValues()[0];
     const current = rowToPresentation_(storedRow, rowNumber, tz);
+
+    // Completion-only update (no other editable field in the request): validates and writes column L
+    // alone. The rest of the record is neither re-validated nor rewritten, so marking an older record
+    // (e.g. one with no planned time) as COMPLETED never fails because of unrelated fields.
+    const hasField = (f) => Object.prototype.hasOwnProperty.call(body, f) && body[f] !== undefined && body[f] !== null;
+    if (hasField("completionStatus") && !UPDATABLE_FIELDS.some(f => f !== "completionStatus" && hasField(f))) {
+      return updateCompletionOnly_(sheet, rowNumber, storedRow, current, tz, body.completionStatus, requestId, cache);
+    }
     const merged = {};
     UPDATABLE_FIELDS.forEach(f => { merged[f] = current[f]; });
     UPDATABLE_FIELDS.forEach(f => {
@@ -602,6 +669,29 @@ function handleUpdate_(body) {
   }
 }
 
+function updateCompletionOnly_(sheet, rowNumber, storedRow, current, tz, rawValue, requestId, cache) {
+  const check = validateSubmission_({ completionStatus: rawValue });
+  if (check.errors.completionStatus) {
+    throw new ApiError("VALIDATION_ERROR", "Please correct the highlighted fields.",
+      { completionStatus: check.errors.completionStatus });
+  }
+  const value = check.value.completionStatus;
+  if (value === current.completionStatus) {
+    const same = { presentation: current, previousStatus: current.status, unchanged: true, replayed: false };
+    if (requestId) cache.put("upd_" + requestId, JSON.stringify(same), CONFIG.REQUEST_ID_TTL_SEC);
+    return same;
+  }
+  enforceRateLimit_(cache);
+  sheet.getRange(rowNumber, COL.COMPLETION + 1, 1, 1).setNumberFormat("@").setValue(value);
+  SpreadsheetApp.flush();
+  const updatedRow = storedRow.slice();
+  updatedRow[COL.COMPLETION] = value;
+  const result = { presentation: rowToPresentation_(updatedRow, rowNumber, tz), previousStatus: current.status,
+                   unchanged: false, replayed: false };
+  if (requestId) cache.put("upd_" + requestId, JSON.stringify(result), CONFIG.REQUEST_ID_TTL_SEC);
+  return result;
+}
+
 function appendRow_(sheet, values) {
   const row = sheet.getLastRow() + 1;
   if (row > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 100);
@@ -630,6 +720,13 @@ function cellTime_(value, tz) {
   return normaliseTime_(value);
 }
 
+// Completion cell → "PENDING" | "COMPLETED". Empty or unrecognised text (e.g. a hand-typed row) is PENDING.
+// Never derived from the planned date.
+function cellCompletion_(value) {
+  return String(value == null ? "" : value).trim().toUpperCase() === COMPLETION_COMPLETED
+    ? COMPLETION_COMPLETED : COMPLETION_PENDING;
+}
+
 function rowToPresentation_(row, rowNumber, tz) {
   const code = availabilityCode_(row[COL.AVAILABILITY]) || "Pending";   // unrecognised → not ready
   const created = row[COL.TIMESTAMP];
@@ -645,6 +742,7 @@ function rowToPresentation_(row, rowNumber, tz) {
     availability: code,
     challenge: status === STATUS_READY ? "" : String(row[COL.CHALLENGE] || ""),   // a ready presentation has no challenge
     status: status,
+    completionStatus: cellCompletion_(row[COL.COMPLETION]),
     createdAt: created instanceof Date && !isNaN(created) ? isoUtc_(created) : ""
   };
 }
@@ -772,6 +870,17 @@ function runSelfTest() {
   check("Time '25:00' rejected", !!t({ time: "25:00", availability: "Confirmed" }).errors.time);
   check("Time '10:75' rejected", !!t({ time: "10:75", availability: "Confirmed" }).errors.time);
   check("Missing time rejected", !!t({ time: "", availability: "Confirmed" }).errors.time);
+
+  check("Completion status defaults to PENDING when absent", t({ availability: "Confirmed" }).value.completionStatus === COMPLETION_PENDING);
+  check("Completion status COMPLETED accepted", t({ availability: "Confirmed", completionStatus: "COMPLETED" }).value.completionStatus === COMPLETION_COMPLETED);
+  check("Completion status PENDING accepted", t({ availability: "Pending", challenge: "x", completionStatus: "PENDING" }).ok);
+  check("Completion status 'DONE' rejected", !!t({ availability: "Confirmed", completionStatus: "DONE" }).errors.completionStatus);
+  check("Completion status '' rejected", !!t({ availability: "Confirmed", completionStatus: "" }).errors.completionStatus);
+  check("Completion status 'completed' (lowercase) rejected", !!t({ availability: "Confirmed", completionStatus: "completed" }).errors.completionStatus);
+  check("Completion status non-text rejected", !!t({ availability: "Confirmed", completionStatus: true }).errors.completionStatus);
+  check("Completion is independent of readiness", statusFor_("Pending") === STATUS_UNREADY &&
+        t({ availability: "Pending", challenge: "x", completionStatus: "COMPLETED" }).ok);
+  check("Empty completion cell reads as PENDING", cellCompletion_("") === COMPLETION_PENDING && cellCompletion_(null) === COMPLETION_PENDING);
 
   if (failures.length) throw new Error("Self-test failed: " + failures.join("; "));
   Logger.log("All self-test checks passed.");

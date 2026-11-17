@@ -96,6 +96,7 @@ function normalisePresentation(p) {
     availability: AVAILABILITY[p.availability] ? p.availability : "Pending",
     challenge: String(p.challenge ?? ""),
     status: p.status === "READY" ? "READY" : "UNREADY",
+    completionStatus: p.completionStatus === "COMPLETED" ? "COMPLETED" : "PENDING",   // anything else = PENDING
     createdAt: String(p.createdAt ?? "")
   };
 }
@@ -198,6 +199,16 @@ async function updatePresentation(id, changes, onStatus) {
   };
 }
 
+// Marks ONE presentation COMPLETED or PENDING. Sends only { id, completionStatus }: the backend then
+// writes column L alone and never touches readiness, date or any other field.
+async function setCompletionStatus(id, completionStatus, onStatus) {
+  const json = await sendMutation("update", { id, completionStatus }, onStatus);
+  return {
+    presentation: normalisePresentation(json.presentation),
+    unchanged: json.unchanged === true
+  };
+}
+
 /* ===================================================================== */
 
 function escapeHTML(value) {
@@ -210,6 +221,13 @@ function escapeHTML(value) {
 function isReady(p) {
   return p.status === "READY";
 }
+
+// Completion is separate from readiness: has the presentation actually taken place?
+function isCompleted(p) {
+  return p.completionStatus === "COMPLETED";
+}
+
+const completionInFlight = new Set();   // ids whose completion change is being saved (blocks double clicks)
 
 function formatDate(value) {
   if (!value) return "—";
@@ -251,6 +269,36 @@ function presentationCard(p, index, showChallenge = false) {
         <span class="status status-${a.tone}"><i class="dot"></i>${escapeHTML(a.label)}</span>
       </div>${challenge}
       <div class="presentation-actions">
+        ${completionButton(p, "COMPLETED")}
+        <button type="button" class="edit-btn" data-edit-id="${escapeHTML(p.id)}"
+          aria-label="Edit presentation: ${escapeHTML(p.topic)}">Edit Presentation</button>
+      </div>
+    </article>`;
+}
+
+// "Mark as Done ✓" (pending cards) / "Return to Pending" (completed cards). Disabled while saving.
+function completionButton(p, target) {
+  const done = target === "COMPLETED";
+  const busy = completionInFlight.has(p.id);
+  const text = busy ? "Saving…" : done ? "Mark as Done ✓" : "Return to Pending";
+  return `<button type="button" class="edit-btn complete-btn" data-complete-id="${escapeHTML(p.id)}"
+          data-complete-to="${target}"${busy ? " disabled" : ""}
+          aria-label="${done ? "Mark as done" : "Return to pending"}: ${escapeHTML(p.topic)}">${text}</button>`;
+}
+
+// Completed presentations: topic, student presenter, planned date and supervisor.
+function completedCard(p, index) {
+  return `
+    <article class="presentation presentation-completed">
+      <h3>${index + 1}. ${escapeHTML(p.topic)}</h3>
+      <div class="presentation-meta">
+        <span>Presenter: ${escapeHTML(p.student)}</span>
+        <span>Date: ${escapeHTML(formatDate(p.date))}</span>
+        <span>Supervisor: ${escapeHTML(p.supervisor)}</span>
+        <span class="status status-ready"><i class="dot"></i>Completed</span>
+      </div>
+      <div class="presentation-actions">
+        ${completionButton(p, "PENDING")}
         <button type="button" class="edit-btn" data-edit-id="${escapeHTML(p.id)}"
           aria-label="Edit presentation: ${escapeHTML(p.topic)}">Edit Presentation</button>
       </div>
@@ -262,14 +310,18 @@ const setText = (id, text) => { byId(id).textContent = text; };
 
 // All counts are calculated from the records returned by the database — nothing is hard-coded.
 function renderDashboard() {
-  const ready = presentations.filter(isReady);
-  const unready = presentations.filter(p => !isReady(p));
+  // Ready / Unready sections and counts cover PENDING presentations only; completed ones have their own section.
+  const pending = presentations.filter(p => !isCompleted(p));
+  const completed = presentations.filter(isCompleted);
+  const ready = pending.filter(isReady);
+  const unready = pending.filter(p => !isReady(p));
 
   setText("total", presentations.length);
   setText("ready", ready.length);
   setText("unready", unready.length);
   setText("ready-count", `${ready.length} confirmed`);
   setText("unready-count", `${unready.length} requiring attention`);
+  setText("completed-count", `${completed.length} completed`);
   setText("progress-label", `${presentations.length} / ${TARGET}`);
 
   // Bar is capped visually at 100%; registrations are never blocked past TARGET.
@@ -283,6 +335,10 @@ function renderDashboard() {
     ? unready.map((p, i) => presentationCard(p, i, true)).join("")
     : '<div class="empty">No outstanding challenges.</div>';
 
+  byId("completed-list").innerHTML = completed.length
+    ? completed.map((p, i) => completedCard(p, i)).join("")
+    : '<div class="empty">No completed presentations yet.</div>';
+
   renderOverview();
 }
 
@@ -293,15 +349,19 @@ function renderOverview() {
 
   const filtered = presentations.filter(p => {
     const matchesSearch = `${p.topic} ${p.student}`.toLowerCase().includes(query);
+    // Pending / Completed use completionStatus; Ready / Unready use the backend readiness status.
+    // The two are independent: completing a presentation never changes its readiness.
     const matchesFilter =
       filter === "all" ||
+      (filter === "pending" && !isCompleted(p)) ||
+      (filter === "completed" && isCompleted(p)) ||
       (filter === "ready" && isReady(p)) ||
       (filter === "unready" && !isReady(p));
     return matchesSearch && matchesFilter;
   });
 
   byId("overview").innerHTML = filtered.length
-    ? filtered.map((p, i) => presentationCard(p, i, !isReady(p))).join("")
+    ? filtered.map((p, i) => (isCompleted(p) ? completedCard(p, i) : presentationCard(p, i, !isReady(p)))).join("")
     : `<div class="empty">${presentations.length ? "No matching presentations." : "No presentations registered."}</div>`;
 }
 
@@ -324,18 +384,20 @@ function showLoadingState() {
   ["total", "ready", "unready"].forEach(id => setText(id, "–"));
   setText("ready-count", "loading");
   setText("unready-count", "loading");
+  setText("completed-count", "loading");
   setText("progress-label", `– / ${TARGET}`);
   byId("progress").style.width = "0%";
   const loading = '<div class="empty">Loading presentations…</div>';
-  ["ready-list", "unready-list", "overview"].forEach(id => { byId(id).innerHTML = loading; });
+  ["ready-list", "unready-list", "completed-list", "overview"].forEach(id => { byId(id).innerHTML = loading; });
   setSyncStatus("Loading presentations…", "");
 }
 
 function showLoadError(message) {
   const box = `<div class="empty error">${escapeHTML(message)}</div>`;
-  ["ready-list", "unready-list", "overview"].forEach(id => { byId(id).innerHTML = box; });
+  ["ready-list", "unready-list", "completed-list", "overview"].forEach(id => { byId(id).innerHTML = box; });
   setText("ready-count", "unavailable");
   setText("unready-count", "unavailable");
+  setText("completed-count", "unavailable");
   lastRenderKey = "";
   setSyncStatus(message, "error");
 }
@@ -410,6 +472,46 @@ function comparePresentations(a, b) {
   return key(a.date, b.date) || key(a.time, b.time) || (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0);
 }
 
+/* ---------- Mark as Done / Return to Pending ---------- */
+
+let toastTimer = null;
+function showToast(text, type) {
+  const el = byId("toast");
+  clearTimeout(toastTimer);
+  el.textContent = text;
+  el.className = `toast ${type || "success"} show`;
+  toastTimer = setTimeout(() => { el.className = "toast"; }, type === "error" ? 6000 : 3000);
+}
+
+async function changeCompletion(id, target) {
+  if (completionInFlight.has(id) || submitInFlight) {          // already saving: ignore repeated clicks
+    if (!completionInFlight.has(id)) showToast("Another save is in progress. Please try again in a moment.", "error");
+    return;
+  }
+  const record = presentations.find(p => p.id === id);
+  if (!record) return;
+  completionInFlight.add(id);
+  lastRenderKey = "";
+  renderDashboard();                                           // buttons show "Saving…" and are disabled
+
+  let saved = null;
+  try {
+    const result = await setCompletionStatus(id, target);
+    saved = result.presentation;
+    showToast(target === "COMPLETED"
+      ? "Marked as done. It now appears under Completed Presentations."
+      : "Returned to pending. It is back in the Ready / Unready list.", "success");
+  } catch (error) {
+    console.error("Could not change completion status:", error);
+    showToast(error.message || "Could not save the change. Please try again.", "error");
+  } finally {
+    completionInFlight.delete(id);
+  }
+  if (saved) upsertSavedPresentation(saved);                   // show the confirmed record at once
+  else { lastRenderKey = ""; renderDashboard(); }              // re-enable the button
+  refreshPresentations({ force: true });                       // then re-read the real records
+}
+
 let autoRefreshTimer = null;
 
 function startAutoRefresh() {
@@ -430,6 +532,9 @@ function initDashboard() {
   document.addEventListener("click", event => {
     const button = event.target.closest("[data-edit-id]");
     if (button) openEditModal(button.getAttribute("data-edit-id"));      // form.js
+
+    const done = event.target.closest("[data-complete-id]");
+    if (done && !done.disabled) changeCompletion(done.getAttribute("data-complete-id"), done.getAttribute("data-complete-to"));
   });
 
   byId("search").addEventListener("input", renderOverview);

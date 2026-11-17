@@ -73,7 +73,9 @@
       <input id="search" type="search" placeholder="Search topic or student..."
         aria-label="Search by topic or student">
       <select id="filter" aria-label="Filter presentations">
-        <option value="all">All presentations</option>
+        <option value="all">All Presentations</option>
+        <option value="pending">Pending Presentations</option>
+        <option value="completed">Completed Presentations</option>
         <option value="ready">Ready</option>
         <option value="unready">Unready</option>
       </select>
@@ -97,11 +99,20 @@
     <div id="unready-list"><div class="empty">No outstanding challenges.</div></div>
   </section>
 
+  <section class="section">
+    <h2 class="section-title">Completed Presentations
+      <span class="completed-tag" id="completed-count">0 completed</span>
+    </h2>
+    <div id="completed-list"><div class="empty">No completed presentations yet.</div></div>
+  </section>
+
 </div>
 
 <footer class="footer">Built by Bonheur Mwizerwa, Founder of <a href="https://www.boldpeakshub.com" target="_blank" rel="noopener noreferrer">BoldPeaks Hub</a></footer>
 
 </main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <!-- REGISTRATION / EDIT MODAL (one form, two modes: register a new presentation, edit an existing one) -->
 <div class="modal-overlay" id="modal-overlay">
